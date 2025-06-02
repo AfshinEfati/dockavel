@@ -1,0 +1,7 @@
+/projects/*
+!/projects/.gitkeep
+
+/nginx/conf.d/*
+!/nginx/conf.d/.gitkeep
+
+.idea
