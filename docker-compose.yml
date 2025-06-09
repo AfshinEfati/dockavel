@@ -1,29 +1,19 @@
 services:
-  traefik:
-    image: traefik:v2.9
-    command:
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-    ports:
-      - "80:80"
-      - "8081:8080"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - dev
-
   php:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        UID: ${UID}
+        GID: ${GID}
     container_name: php
     volumes:
       - ./projects:/var/www
     networks:
       - dev
     user: "${UID}:${GID}"
+    environment:
+      COMPOSER_CACHE_DIR: /var/www/.composer-cache
 
   mysql:
     image: mysql:8.0
@@ -50,6 +40,7 @@ services:
       - "traefik.http.services.phpmyadmin.loadbalancer.server.port=80"
     networks:
       - dev
+
   nginx:
     image: nginx:alpine
     container_name: nginx
@@ -67,6 +58,20 @@ services:
     networks:
       - dev
 
+  traefik:
+    image: traefik:v2.9
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8081:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - dev
 
 networks:
   dev:
