@@ -14,7 +14,14 @@ services:
     user: "${UID}:${GID}"
     environment:
       COMPOSER_CACHE_DIR: /var/www/.composer-cache
-
+  redis:
+    image: redis:alpine
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - dev
   mysql:
     image: mysql:8.0
     environment:

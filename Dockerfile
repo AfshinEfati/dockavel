@@ -7,8 +7,14 @@ ARG GID=1000
 # نصب ابزارها و اکستنشن‌ها
 RUN apt-get update && apt-get install -y \
     curl git unzip zip gnupg2 libzip-dev libonig-dev libxml2-dev libpng-dev libjpeg-dev libfreetype6-dev \
+    pkg-config libssl-dev autoconf make gcc \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install zip pdo_mysql mbstring pcntl gd
+    && docker-php-ext-install zip pdo_mysql mbstring pcntl gd \
+    \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
+    \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # نصب Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
