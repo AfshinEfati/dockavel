@@ -2,7 +2,7 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "laravel/laravel",
     "type": "project",
-    "description": "Temporary dependency-resolution workspace for the babak_back L5-Swagger installation (final verification).",
+    "description": "Temporary dependency-resolution workspace for the babak_back L5-Swagger installation (publish verification).",
     "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {
