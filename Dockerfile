@@ -1,14 +1,13 @@
-ARG PIE_IMAGE=ghcr-mirror.liara.ir/php/pie:bin
-
+ARG PIE_IMAGE=ghcr.io/php/pie:bin
 FROM ${PIE_IMAGE} AS pie
 
 FROM php:8.2-fpm
 
 ARG UID=1000
 ARG GID=1000
-ARG DEBIAN_MIRROR=http://linux-mirror.liara.ir/repository/debian
-ARG DEBIAN_SECURITY_MIRROR=http://linux-mirror.liara.ir/repository/debian-security
-ARG COMPOSER_REPOSITORY=https://package-mirror.liara.ir/repository/composer/
+ARG DEBIAN_MIRROR=http://deb.debian.org/debian
+ARG DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security
+ARG COMPOSER_REPOSITORY=https://repo.packagist.org
 
 ENV DEBIAN_FRONTEND=noninteractive \
     COMPOSER_ALLOW_SUPERUSER=1 \

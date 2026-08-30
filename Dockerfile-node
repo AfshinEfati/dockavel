@@ -3,9 +3,9 @@ FROM node:24-bookworm-slim
 ARG UID=1000
 ARG GID=1000
 
-ARG DEBIAN_MIRROR=http://linux-mirror.liara.ir/repository/debian
-ARG DEBIAN_SECURITY_MIRROR=http://linux-mirror.liara.ir/repository/debian-security
-ARG NPM_REGISTRY=https://package-mirror.liara.ir/repository/npm/
+ARG DEBIAN_MIRROR=http://deb.debian.org/debian
+ARG DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security
+ARG NPM_REGISTRY=https://registry.npmjs.org/
 
 ENV DEBIAN_FRONTEND=noninteractive \
     NPM_CONFIG_REGISTRY=${NPM_REGISTRY} \

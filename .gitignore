@@ -4,6 +4,9 @@
 /nginx/conf.d/*
 !/nginx/conf.d/.gitkeep
 
+/supervisor/conf.d/*
+!/supervisor/conf.d/.gitkeep
+
 .idea
 .env
 

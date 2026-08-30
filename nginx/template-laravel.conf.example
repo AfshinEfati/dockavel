@@ -3,7 +3,6 @@ server {
     server_name {{DOMAIN}}.local;
 
     root /var/www/{{PROJECT_NAME}}/public;
-
     index index.php index.html;
 
     location / {
@@ -12,9 +11,12 @@ server {
 
     location ~ \.php$ {
         include fastcgi_params;
-        fastcgi_pass php:9000;
+        //you can change PHP_SERVICE with php or php85
+        fastcgi_pass {{PHP_SERVICE}}:9000;
         fastcgi_index index.php;
+
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param DOCUMENT_ROOT $document_root;
     }
 
     location ~ /\.ht {
