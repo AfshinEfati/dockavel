@@ -6,6 +6,10 @@ services:
       args:
         UID: ${UID}
         GID: ${GID}
+        PIE_IMAGE: ${PIE_IMAGE}
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR}
+        DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR}
+        COMPOSER_REPOSITORY: ${COMPOSER_REPOSITORY}
     container_name: php
     volumes:
       - ./projects:/var/www
@@ -13,7 +17,77 @@ services:
       - dev
     user: "${UID}:${GID}"
     environment:
+      HOME: /var/www
+      COMPOSER_HOME: /opt/composer
       COMPOSER_CACHE_DIR: /var/www/.composer-cache
+      COMPOSER_PROCESS_TIMEOUT: 600
+
+  php85:
+    build:
+      context: .
+      dockerfile: Dockerfile-php85
+      args:
+        UID: ${UID}
+        GID: ${GID}
+        PIE_IMAGE: ${PIE_IMAGE}
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR}
+        DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR}
+        COMPOSER_REPOSITORY: ${COMPOSER_REPOSITORY}
+    container_name: php85
+    volumes:
+      - ./projects:/var/www
+    networks:
+      - dev
+    user: "${UID}:${GID}"
+    environment:
+      HOME: /var/www
+      COMPOSER_HOME: /opt/composer
+      COMPOSER_CACHE_DIR: /var/www/.composer-cache
+      COMPOSER_PROCESS_TIMEOUT: 600
+      PSYSH_CONFIG_DIR: /var/www/.psysh
+      XDG_CONFIG_HOME: /var/www/.config
+      XDG_DATA_HOME: /var/www/.local/share
+
+  node:
+    build:
+      context: .
+      dockerfile: Dockerfile-node
+      args:
+        UID: ${UID}
+        GID: ${GID}
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR}
+        DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR}
+        NPM_REGISTRY: ${NPM_REGISTRY}
+    container_name: node
+    restart: unless-stopped
+    init: true
+    working_dir: /var/www
+    volumes:
+      - ./projects:/var/www
+      - ./supervisor/conf.d:/etc/supervisor/conf.d:ro
+    networks:
+      - dev
+    environment:
+      HOME: /var/www
+
+      NPM_CONFIG_REGISTRY: ${NPM_REGISTRY}
+      npm_config_registry: ${NPM_REGISTRY}
+      NPM_CONFIG_CACHE: /var/www/.npm-cache
+      NPM_CONFIG_FETCH_RETRIES: "20"
+      NPM_CONFIG_FETCH_RETRY_FACTOR: "2"
+      NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: "20000"
+      NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: "180000"
+      NPM_CONFIG_FETCH_TIMEOUT: "600000"
+      NPM_CONFIG_MAXSOCKETS: "2"
+      NPM_CONFIG_AUDIT: "false"
+      NPM_CONFIG_FUND: "false"
+      NPM_CONFIG_PROGRESS: "false"
+
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+    expose:
+      - "3000-3099"
+
   redis:
     image: redis:alpine
     container_name: redis
@@ -22,6 +96,7 @@ services:
       - "6379:6379"
     networks:
       - dev
+
   mysql:
     image: mysql:8.0
     environment:
@@ -30,7 +105,7 @@ services:
       MYSQL_USER: laravel
       MYSQL_PASSWORD: secret
     ports:
-      - "3306:3306"
+      - "13307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     networks:
@@ -53,32 +128,30 @@ services:
     container_name: nginx
     depends_on:
       - php
+      - node
     ports:
-      - "8080:80"
+      - "80:80"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d
       - ./projects:/var/www
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.nginx.rule=HostRegexp(`{subdomain:[a-z]+}.local`)"
-      - "traefik.http.services.nginx.loadbalancer.server.port=80"
     networks:
       - dev
 
-  traefik:
-    image: traefik:v2.9
-    command:
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-    ports:
-      - "80:80"
-      - "8081:8080"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - dev
+  # traefik disabled - using nginx directly
+  # traefik:
+  #   image: traefik:v2.9
+  #   command:
+  #     - "--api.insecure=true"
+  #     - "--providers.docker=true"
+  #     - "--providers.docker.exposedbydefault=false"
+  #     - "--entrypoints.web.address=:80"
+  #   ports:
+  #     - "80:80"
+  #     - "8081:8080"
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   networks:
+  #     - dev
 
 networks:
   dev:

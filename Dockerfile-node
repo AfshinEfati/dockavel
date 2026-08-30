@@ -1,0 +1,100 @@
+FROM node:24-bookworm-slim
+
+ARG UID=1000
+ARG GID=1000
+
+ARG DEBIAN_MIRROR=http://linux-mirror.liara.ir/repository/debian
+ARG DEBIAN_SECURITY_MIRROR=http://linux-mirror.liara.ir/repository/debian-security
+ARG NPM_REGISTRY=https://package-mirror.liara.ir/repository/npm/
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    NPM_CONFIG_REGISTRY=${NPM_REGISTRY} \
+    npm_config_registry=${NPM_REGISTRY} \
+    NPM_CONFIG_FETCH_RETRIES=20 \
+    NPM_CONFIG_FETCH_RETRY_FACTOR=2 \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=180000 \
+    NPM_CONFIG_FETCH_TIMEOUT=600000 \
+    NPM_CONFIG_MAXSOCKETS=2 \
+    NPM_CONFIG_AUDIT=false \
+    NPM_CONFIG_FUND=false \
+    NPM_CONFIG_PROGRESS=false
+
+RUN set -eux; \
+    if [ -f /etc/apt/sources.list ]; then \
+        sed -i \
+            -e "s|http://deb.debian.org/debian|${DEBIAN_MIRROR}|g" \
+            -e "s|https://deb.debian.org/debian|${DEBIAN_MIRROR}|g" \
+            -e "s|http://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
+            -e "s|https://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
+            -e "s|http://security.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
+            -e "s|https://security.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
+            /etc/apt/sources.list; \
+    fi; \
+    if [ -d /etc/apt/sources.list.d ]; then \
+        find /etc/apt/sources.list.d -type f \
+            \( -name "*.list" -o -name "*.sources" \) \
+            -exec sed -i \
+                -e "s|http://deb.debian.org/debian|${DEBIAN_MIRROR}|g" \
+                -e "s|https://deb.debian.org/debian|${DEBIAN_MIRROR}|g" \
+                -e "s|http://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
+                -e "s|https://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
+                -e "s|http://security.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
+                -e "s|https://security.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
+                {} +; \
+    fi; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        bash \
+        ca-certificates \
+        curl \
+        g++ \
+        git \
+        make \
+        openssh-client \
+        python3 \
+        supervisor; \
+    update-ca-certificates; \
+    apt-get clean; \
+    rm -rf \
+        /var/lib/apt/lists/* \
+        /tmp/* \
+        /var/tmp/*
+
+RUN set -eux; \
+    printf 'registry=%s\n' "${NPM_REGISTRY}" > /usr/local/etc/npmrc; \
+    printf 'fetch-retries=20\n' >> /usr/local/etc/npmrc; \
+    printf 'fetch-retry-factor=2\n' >> /usr/local/etc/npmrc; \
+    printf 'fetch-retry-mintimeout=20000\n' >> /usr/local/etc/npmrc; \
+    printf 'fetch-retry-maxtimeout=180000\n' >> /usr/local/etc/npmrc; \
+    printf 'fetch-timeout=600000\n' >> /usr/local/etc/npmrc; \
+    printf 'maxsockets=2\n' >> /usr/local/etc/npmrc; \
+    printf 'audit=false\n' >> /usr/local/etc/npmrc; \
+    printf 'fund=false\n' >> /usr/local/etc/npmrc; \
+    printf 'progress=false\n' >> /usr/local/etc/npmrc; \
+    node --version; \
+    npm --version; \
+    npm config get registry
+
+RUN set -eux; \
+    if [ "$(id -g node)" != "${GID}" ]; then \
+        groupmod --non-unique --gid "${GID}" node; \
+    fi; \
+    if [ "$(id -u node)" != "${UID}" ]; then \
+        usermod --non-unique --uid "${UID}" node; \
+    fi; \
+    mkdir -p \
+        /var/www \
+        /var/www/.npm-cache \
+        /var/www/.yarn-cache \
+        /var/www/.cache \
+        /var/www/.cache/corepack \
+        /home/node/.cache \
+        /home/node/.npm; \
+    chown -R node:node \
+        /var/www \
+        /home/node
+
+WORKDIR /var/www
+
+CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/supervisord.conf"]
