@@ -1,32 +1,39 @@
-FROM php:8.2-fpm
+ARG PHP_VERSION=8.3
+ARG NODE_VERSION=22
 
-# پارامترهای کاربر
-ARG UID=1000
-ARG GID=1000
+FROM node:${NODE_VERSION}-bookworm-slim AS node
+FROM php:${PHP_VERSION}-fpm-bookworm
 
-# نصب ابزارها و اکستنشن‌ها
-RUN apt-get update && apt-get install -y \
-    curl git unzip zip gnupg2 libzip-dev libonig-dev libxml2-dev libpng-dev libjpeg-dev libfreetype6-dev \
-    pkg-config libssl-dev autoconf make gcc \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    git \
+    unzip \
+    zip \
+    libzip-dev \
+    libonig-dev \
+    libxml2-dev \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    libicu-dev \
+    pkg-config \
+    libssl-dev \
+    autoconf \
+    make \
+    gcc \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install zip pdo_mysql mbstring pcntl gd \
-    \
+    && docker-php-ext-install -j"$(nproc)" zip pdo_mysql mbstring pcntl gd bcmath intl \
     && pecl install redis \
     && docker-php-ext-enable redis \
-    \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# نصب Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
+COPY --from=node /usr/local/ /usr/local/
 
-# تنظیمات Composer cache
+RUN corepack enable \
+    && npm install --global pm2
+
 ENV COMPOSER_CACHE_DIR=/var/www/.composer-cache
-RUN mkdir -p /var/www/.composer-cache && chown -R ${UID}:${GID} /var/www/.composer-cache
 
-# نصب nvm, node, pnpm, pm2
-ENV NVM_DIR=/root/.nvm
-RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | bash && \
-    bash -c ". $NVM_DIR/nvm.sh && nvm install node && npm install -g pnpm pm2"
-
-# مسیر کاری
 WORKDIR /var/www
