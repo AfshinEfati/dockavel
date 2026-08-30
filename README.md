@@ -1,4 +1,5 @@
 # Dockavel
+[![CI](https://github.com/AfshinEfati/dockavel/actions/workflows/ci.yml/badge.svg)](https://github.com/AfshinEfati/dockavel/actions/workflows/ci.yml)
 
 A lightweight multi-project development environment for **Laravel and Node.js applications**, powered by Docker Compose, Nginx, PHP-FPM, MySQL, Redis, and Supervisor.
 
