@@ -1,7 +1,13 @@
+.env
+.env.*
+!.env.example
+
 /projects/*
 !/projects/.gitkeep
 
 /nginx/conf.d/*
 !/nginx/conf.d/.gitkeep
 
-.idea
+.idea/
+.vscode/
+.DS_Store
