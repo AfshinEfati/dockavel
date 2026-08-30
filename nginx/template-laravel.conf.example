@@ -3,7 +3,6 @@ server {
     server_name {{DOMAIN}}.local;
 
     root /var/www/{{PROJECT_NAME}}/public;
-
     index index.php index.html;
 
     location / {
