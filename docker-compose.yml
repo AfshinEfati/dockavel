@@ -112,10 +112,10 @@ services:
     ports:
       - "127.0.0.1:${MYSQL_PORT:-13307}:3306"
 
-  volumes:
-    - mysql_data:/var/lib/mysql
+    volumes:
+      - mysql_data:/var/lib/mysql
 
-  networks:
+    networks:
     - dev
 
   phpmyadmin:
@@ -146,6 +146,8 @@ services:
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d
       - ./projects:/var/www
+
+
     networks:
       - dev
 
