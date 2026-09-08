@@ -266,15 +266,17 @@ select_download_source() {
 
     case "$preset" in
         official) default_index=0 ;;
-        iran) default_index=1 ;;
-        china) default_index=2 ;;
-        custom) default_index=3 ;;
+        iranserver) default_index=1 ;;
+        iran|runflare) default_index=2 ;;
+        china) default_index=3 ;;
+        custom) default_index=4 ;;
         *) default_index=0 ;;
     esac
 
     choose_one "Download source" "$default_index" \
         "Official / Global" \
-        "Iran / Runflare" \
+        "Iran / IranServer (recommended)" \
+        "Iran / Runflare (GHCR proxy, quota-limited)" \
         "China / regional mirrors" \
         "Custom endpoints"
 
@@ -293,7 +295,23 @@ select_download_source() {
             NPM_STRICT_SSL="true"
             ;;
         1)
-            DOWNLOAD_SOURCE_PRESET="iran"
+            DOWNLOAD_SOURCE_PRESET="iranserver"
+            SOURCE_LABEL="Iran / IranServer"
+            # IranServer mirrors Docker Hub, Debian, Composer and npm. Dockavel's
+            # prebuilt runtimes currently live on GHCR, so those few images are
+            # pulled directly from GHCR instead of consuming Runflare quota.
+            DOCKAVEL_RUNTIME_PREFIX="ghcr.io/afshinefati/"
+            DOCKER_LIBRARY_PREFIX="docker.iranserver.com/library/"
+            DOCKER_NAMESPACE_PREFIX="docker.iranserver.com/"
+            GHCR_PREFIX="ghcr.io/"
+            DEBIAN_MIRROR="https://mirror.iranserver.com/debian"
+            DEBIAN_SECURITY_MIRROR="https://mirror.iranserver.com/debian-security"
+            COMPOSER_REPOSITORY="https://composer.iranserver.com/repository/composer/"
+            NPM_REGISTRY="https://npm.iranserver.com/repository/npm/"
+            NPM_STRICT_SSL="false"
+            ;;
+        2)
+            DOWNLOAD_SOURCE_PRESET="runflare"
             SOURCE_LABEL="Iran / Runflare"
             DOCKAVEL_RUNTIME_PREFIX="mirror-docker.runflare.com/afshinefati/"
             DOCKER_LIBRARY_PREFIX="mirror-docker.runflare.com/library/"
@@ -305,7 +323,7 @@ select_download_source() {
             NPM_REGISTRY="https://mirror-npm.runflare.com"
             NPM_STRICT_SSL="false"
             ;;
-        2)
+        3)
             DOWNLOAD_SOURCE_PRESET="china"
             SOURCE_LABEL="China / regional mirrors"
             DOCKAVEL_RUNTIME_PREFIX="m.daocloud.io/ghcr.io/afshinefati/"
@@ -318,7 +336,7 @@ select_download_source() {
             NPM_REGISTRY="https://registry.npmmirror.com/"
             NPM_STRICT_SSL="true"
             ;;
-        3)
+        4)
             DOWNLOAD_SOURCE_PRESET="custom"
             SOURCE_LABEL="Custom"
 
@@ -474,6 +492,11 @@ printf 'Node.js         : %s\n' "$([[ "$NODE_ENABLED" -eq 1 ]] && echo Yes || ec
 printf 'phpMyAdmin      : %s\n' "$([[ "$PHPMYADMIN_ENABLED" -eq 1 ]] && echo Yes || echo No)"
 printf 'pgAdmin         : %s\n' "$([[ "$PGADMIN_ENABLED" -eq 1 ]] && echo Yes || echo No)"
 printf '\nCOMPOSE_PROFILES=%s\n' "$PROFILES_CSV"
+
+if [[ "$DOWNLOAD_SOURCE_PRESET" == "runflare" ]]; then
+    printf '\nNote: Runflare currently limits free mirror usage to 500 requests per IP.\n'
+    printf 'A 402 Payment Required response normally means that quota has been exhausted.\n'
+fi
 
 choose_one "Pull and start the selected stack now?" 0 \
     "Yes, pull and start" \
