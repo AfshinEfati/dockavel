@@ -1,25 +1,27 @@
 # Dockavel
+
 [![CI](https://github.com/AfshinEfati/dockavel/actions/workflows/ci.yml/badge.svg)](https://github.com/AfshinEfati/dockavel/actions/workflows/ci.yml)
 
-A lightweight multi-project development environment for **Laravel and Node.js applications**, powered by Docker Compose, Nginx, PHP-FPM, MySQL, Redis, and Supervisor.
+A configurable, multi-project local development environment for **Laravel and Node.js applications**, powered by Docker Compose and Nginx.
 
-Dockavel is designed for developers who work on multiple backend and frontend projects locally and want to share one reusable development stack instead of maintaining a separate infrastructure setup for every project.
+Dockavel is built for developers who maintain multiple projects with different runtime requirements. You can run several PHP versions side by side, enable only the databases and services you need, and route each local project to the appropriate runtime.
 
 ## Features
 
-* Shared Docker environment for multiple local projects
-* PHP 8.2 and PHP 8.5 runtimes
-* Node.js 24 runtime
-* Nginx reverse proxy
-* MySQL 8
-* Redis
-* phpMyAdmin
-* Supervisor for long-running Node.js processes
-* Per-project local domains
-* Laravel and Node.js Nginx templates
-* UID/GID mapping to avoid root-owned project files
-* Configurable package mirrors and registries
-* Docker Compose validation and image builds through GitHub Actions
+- Shared Docker environment for multiple local projects
+- Multiple simultaneous PHP-FPM runtimes: **8.2, 8.3, 8.4, 8.5**
+- One reusable PHP Dockerfile parameterized by `PHP_VERSION`
+- MySQL 8 and PostgreSQL 17
+- Redis 7
+- Node.js 24 with Supervisor
+- phpMyAdmin and pgAdmin as optional database UIs
+- Docker Compose profiles so unused services are not started or built
+- Interactive installer for selecting the local stack before build
+- Nginx routing per project and per PHP runtime
+- PHP support for both `pdo_mysql` and `pdo_pgsql`
+- UID/GID mapping to avoid root-owned project files
+- Configurable Debian, Composer, and npm mirrors
+- GitHub Actions validation across multiple stack combinations
 
 ## Architecture
 
@@ -29,80 +31,26 @@ Browser
    ▼
  Nginx
    │
-   ├──────────────► Laravel Project
-   │                    │
-   │                    ├── PHP 8.2 (php:9000)
-   │                    │
-   │                    └── PHP 8.5 (php85:9000)
-   │
-   └──────────────► Node / Nuxt Project
-                        │
-                        └── Node container
-                              │
-                              └── Supervisor
+   ├── project-a.local ──► php82:9000
+   ├── project-b.local ──► php84:9000
+   ├── project-c.local ──► php85:9000
+   └── frontend.local  ──► node:3000
 
 Applications
    │
-   ├── MySQL
-   └── Redis
+   ├── MySQL      (optional)
+   ├── PostgreSQL (optional)
+   └── Redis      (optional)
 
-Developer
+Developer tools
    │
-   └── phpMyAdmin
+   ├── phpMyAdmin (optional)
+   └── pgAdmin    (optional)
 ```
 
-## Services
+All PHP runtimes mount the same `projects/` directory, so different Laravel projects can use different PHP versions at the same time.
 
-| Service      | Purpose                              |
-| ------------ | ------------------------------------ |
-| `php`        | PHP 8.2 FPM runtime                  |
-| `php85`      | PHP 8.5 FPM runtime                  |
-| `node`       | Node.js 24 development runtime       |
-| `nginx`      | Local HTTP routing and reverse proxy |
-| `mysql`      | Shared MySQL 8 database              |
-| `redis`      | Shared Redis instance                |
-| `phpmyadmin` | Browser-based MySQL administration   |
-
-## Project Structure
-
-```text
-dockavel/
-├── .github/
-│   └── workflows/
-│       └── ci.yml
-├── nginx/
-│   ├── conf.d/
-│   │   └── .gitkeep
-│   ├── template-laravel.conf.example
-│   └── template-node.conf.example
-├── projects/
-│   └── .gitkeep
-├── supervisor/
-│   ├── conf.d/
-│   │   └── .gitkeep
-│   ├── example-node.conf
-│   └── supervisord.conf
-├── .env.example
-├── Dockerfile
-├── Dockerfile-php85
-├── Dockerfile-node
-├── docker-compose.yml
-└── README.md
-```
-
-Local projects, Nginx configurations, and Supervisor application configurations are intentionally excluded from Git.
-
-## Requirements
-
-You need:
-
-* Docker
-* Docker Compose
-* Git
-
-On Windows, Docker Desktop with WSL2 is recommended.
-
-## Installation
+## Quick Start
 
 Clone the repository:
 
@@ -111,79 +59,142 @@ git clone https://github.com/AfshinEfati/dockavel.git
 cd dockavel
 ```
 
-Create your local environment file:
+Run the interactive installer:
+
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+
+Example:
+
+```text
+Dockavel Setup
+
+PHP runtimes
+------------
+1) PHP 8.2
+2) PHP 8.3
+3) PHP 8.4
+4) PHP 8.5
+
+Select one or more versions (example: 1 4): 1 4
+
+Databases
+---------
+1) MySQL 8
+2) PostgreSQL 17
+
+Select databases (example: 1 2): 1 2
+Enable Redis? [Y/n] y
+Enable Node.js? [Y/n] y
+Enable phpMyAdmin? [y/N] n
+Enable pgAdmin? [y/N] y
+```
+
+The installer updates `COMPOSE_PROFILES` in `.env`, validates the resulting Compose configuration, and can build/start the selected stack immediately.
+
+For example:
+
+```env
+COMPOSE_PROFILES=php82,php85,mysql,postgres,redis,node,postgres-ui
+```
+
+Only services belonging to those profiles are activated.
+
+## Manual Configuration
+
+If you do not want to use the installer:
 
 ```bash
 cp .env.example .env
 ```
 
-Then build and start the stack:
-
-```bash
-docker compose build
-docker compose up -d
-```
-
-Check running services:
-
-```bash
-docker compose ps
-```
-
-## Environment Configuration
-
-The default `.env.example` uses public package repositories so the project can be built outside Iran without depending on regional infrastructure.
-
-Example:
+Edit `COMPOSE_PROFILES` yourself:
 
 ```env
-UID=1000
-GID=1000
-
-PIE_IMAGE=ghcr.io/php/pie:bin
-
-DEBIAN_MIRROR=http://deb.debian.org/debian
-DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security
-
-COMPOSER_REPOSITORY=https://repo.packagist.org
-NPM_REGISTRY=https://registry.npmjs.org/
-
-MYSQL_PORT=13307
-MYSQL_ROOT_PASSWORD=root
-MYSQL_DATABASE=laravel
-MYSQL_USER=laravel
-MYSQL_PASSWORD=secret
-
-REDIS_PORT=16379
-
-PHPMYADMIN_PORT=18080
+COMPOSE_PROFILES=php82,php85,mysql,redis,node
 ```
 
-These values are intended for local development.
+Then run:
 
-Developers can override package repositories or mirrors in their own `.env` file without changing the repository configuration.
+```bash
+docker compose up -d --build
+```
 
-## Adding a Laravel Project
+Available profiles:
 
-Place your Laravel project inside:
+| Profile | Service |
+| --- | --- |
+| `php82` | PHP 8.2 FPM |
+| `php83` | PHP 8.3 FPM |
+| `php84` | PHP 8.4 FPM |
+| `php85` | PHP 8.5 FPM |
+| `mysql` | MySQL 8 |
+| `postgres` | PostgreSQL 17 |
+| `redis` | Redis 7 |
+| `node` | Node.js 24 |
+| `mysql-ui` | phpMyAdmin |
+| `postgres-ui` | pgAdmin |
+
+Nginx is a core service and does not require a profile.
+
+## Running Multiple PHP Versions Simultaneously
+
+This is one of Dockavel's main use cases.
+
+Example project layout:
 
 ```text
 projects/
+├── legacy-crm/      # PHP 8.2
+├── booking-api/     # PHP 8.4
+└── ledger-core/     # PHP 8.5
 ```
 
-Example:
+Enable the required runtimes:
+
+```env
+COMPOSE_PROFILES=php82,php84,php85,mysql,postgres,redis
+```
+
+Then route each Nginx virtual host to the correct service.
+
+PHP 8.2:
+
+```nginx
+fastcgi_pass php82:9000;
+```
+
+PHP 8.4:
+
+```nginx
+fastcgi_pass php84:9000;
+```
+
+PHP 8.5:
+
+```nginx
+fastcgi_pass php85:9000;
+```
+
+The `php82` service also exposes the network alias `php` for backward compatibility with older Dockavel Nginx configurations.
+
+## Adding a Laravel Project
+
+Place the project inside:
 
 ```text
 projects/my-api
 ```
 
-Create an Nginx configuration using:
+Create a file such as:
 
 ```text
-nginx/template-laravel.conf.example
+nginx/conf.d/my-api.local.conf
 ```
 
-Example configuration:
+Example:
 
 ```nginx
 server {
@@ -199,10 +210,8 @@ server {
 
     location ~ \.php$ {
         include fastcgi_params;
-
-        fastcgi_pass php:9000;
+        fastcgi_pass php85:9000;
         fastcgi_index index.php;
-
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         fastcgi_param DOCUMENT_ROOT $document_root;
     }
@@ -213,13 +222,7 @@ server {
 }
 ```
 
-Save it as:
-
-```text
-nginx/conf.d/my-api.local.conf
-```
-
-Add the local domain to your hosts file:
+Add the domain to the host machine:
 
 ```text
 127.0.0.1 my-api.local
@@ -231,68 +234,113 @@ Restart Nginx:
 docker compose restart nginx
 ```
 
-Then open:
+## PHP Commands
 
-```text
-http://my-api.local
-```
-
-## Choosing a PHP Version
-
-Dockavel includes two PHP-FPM services.
-
-For PHP 8.2:
-
-```nginx
-fastcgi_pass php:9000;
-```
-
-For PHP 8.5:
-
-```nginx
-fastcgi_pass php85:9000;
-```
-
-This makes it possible to run projects requiring different PHP versions inside the same development environment.
-
-## Running Artisan Commands
-
-For a PHP 8.2 project:
+Enter a PHP runtime:
 
 ```bash
-docker compose exec php bash
+docker compose exec php82 bash
 ```
-
-Then:
 
 ```bash
-cd /var/www/my-api
-php artisan migrate
+docker compose exec php84 bash
 ```
-
-For PHP 8.5:
 
 ```bash
 docker compose exec php85 bash
 ```
 
-## Adding a Node.js Project
+Then run commands against any mounted project:
 
-Place the project inside:
-
-```text
-projects/
+```bash
+cd /var/www/my-api
+composer install
+php artisan migrate
 ```
 
-Example:
+## MySQL
+
+Container address:
 
 ```text
-projects/my-frontend
+mysql:3306
 ```
 
-Node applications run inside the shared `node` container.
+Default host address:
 
-Each application should listen on its own port, for example:
+```text
+127.0.0.1:13307
+```
+
+Laravel example:
+
+```env
+DB_CONNECTION=mysql
+DB_HOST=mysql
+DB_PORT=3306
+```
+
+## PostgreSQL
+
+Container address:
+
+```text
+postgres:5432
+```
+
+Default host address:
+
+```text
+127.0.0.1:15432
+```
+
+Laravel example:
+
+```env
+DB_CONNECTION=pgsql
+DB_HOST=postgres
+DB_PORT=5432
+```
+
+Every Dockavel PHP runtime includes both `pdo_mysql` and `pdo_pgsql`, so the same runtime image can work with either database.
+
+## Redis
+
+Container address:
+
+```text
+redis:6379
+```
+
+Default host address:
+
+```text
+127.0.0.1:16379
+```
+
+## Database UIs
+
+When `mysql-ui` is enabled, phpMyAdmin is available at:
+
+```text
+http://127.0.0.1:18080
+```
+
+Use `mysql` as the server host.
+
+When `postgres-ui` is enabled, pgAdmin is available at:
+
+```text
+http://127.0.0.1:18081
+```
+
+Use `postgres` as the server host when registering the database inside pgAdmin.
+
+## Node.js Projects
+
+Node applications share the `node` container and the `projects/` directory.
+
+Applications can listen on independent ports such as:
 
 ```text
 3000
@@ -300,173 +348,62 @@ Each application should listen on its own port, for example:
 3002
 ```
 
-Create an Nginx configuration based on:
+Use `nginx/template-node.conf.example` as a starting point for reverse-proxy configuration.
 
-```text
-nginx/template-node.conf.example
-```
-
-Example:
-
-```nginx
-server {
-    listen 80;
-    server_name my-frontend.local;
-
-    location / {
-        proxy_pass http://node:3000;
-
-        proxy_http_version 1.1;
-
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-Add:
-
-```text
-127.0.0.1 my-frontend.local
-```
-
-to your hosts file.
-
-## Running Node Applications with Supervisor
-
-Dockavel uses Supervisor inside the Node container to keep development processes running.
-
-Application-specific Supervisor configurations belong in:
+Supervisor configuration belongs in:
 
 ```text
 supervisor/conf.d/
 ```
 
-Example:
+## Environment Configuration
 
-```ini
-[program:my-frontend]
-directory=/var/www/my-frontend
+The default `.env.example` uses public package repositories and local-development credentials.
 
-command=npm run dev -- --host 0.0.0.0 --port 3000
-
-autostart=true
-autorestart=true
-startretries=3
-
-stopasgroup=true
-killasgroup=true
-
-stdout_logfile=/dev/fd/1
-stdout_logfile_maxbytes=0
-
-stderr_logfile=/dev/fd/2
-stderr_logfile_maxbytes=0
-
-environment=HOME="/var/www"
-```
-
-Restart the Node service after adding or changing Supervisor configuration:
-
-```bash
-docker compose restart node
-```
-
-View logs:
-
-```bash
-docker compose logs -f node
-```
-
-## MySQL
-
-MySQL is available to containers through:
-
-```text
-mysql:3306
-```
-
-From the host machine, the default address is:
-
-```text
-127.0.0.1:13307
-```
-
-The host port can be changed through:
+Important variables include:
 
 ```env
+COMPOSE_PROFILES=php82,php85,mysql,redis,node,mysql-ui
+
 MYSQL_PORT=13307
-```
-
-## Redis
-
-Containers can access Redis through:
-
-```text
-redis:6379
-```
-
-From the host machine, the default address is:
-
-```text
-127.0.0.1:16379
-```
-
-## phpMyAdmin
-
-phpMyAdmin is available by default at:
-
-```text
-http://127.0.0.1:18080
-```
-
-The port can be changed through:
-
-```env
+POSTGRES_PORT=15432
+REDIS_PORT=16379
 PHPMYADMIN_PORT=18080
+PGADMIN_PORT=18081
 ```
 
-Use `mysql` as the database host when connecting from phpMyAdmin.
+Package repositories and Debian mirrors can be overridden without changing committed files.
 
 ## Useful Commands
 
-Start the stack:
+Show active services:
+
+```bash
+docker compose ps
+```
+
+Start selected services:
 
 ```bash
 docker compose up -d
 ```
 
-Stop it:
+Build and start selected services:
+
+```bash
+docker compose up -d --build
+```
+
+Stop the stack:
 
 ```bash
 docker compose down
 ```
 
-Rebuild containers:
+Build one runtime explicitly:
 
 ```bash
-docker compose build
-```
-
-Rebuild one runtime:
-
-```bash
-docker compose build php
-```
-
-```bash
-docker compose build php85
-```
-
-```bash
-docker compose build node
+docker compose --profile php84 build php84
 ```
 
 View logs:
@@ -475,65 +412,50 @@ View logs:
 docker compose logs -f
 ```
 
-Enter PHP 8.2:
+Validate the active Compose configuration:
 
 ```bash
-docker compose exec php bash
-```
-
-Enter PHP 8.5:
-
-```bash
-docker compose exec php85 bash
-```
-
-Enter Node:
-
-```bash
-docker compose exec node bash
-```
-
-Restart Nginx:
-
-```bash
-docker compose restart nginx
+docker compose config
 ```
 
 ## Local Files and Git
 
-The following directories are intentionally excluded from version control:
+Local projects and machine-specific application configuration are intentionally excluded from version control:
 
 ```text
 projects/*
 nginx/conf.d/*
 supervisor/conf.d/*
+.env
 ```
 
-Only `.gitkeep` placeholders are committed.
-
-Your local `.env` file is also ignored.
-
-This prevents application source code, machine-specific routing, credentials, and local development configuration from accidentally being committed to Dockavel.
+This keeps application code, credentials, local routing, and machine-specific configuration out of the Dockavel repository.
 
 ## CI
 
-GitHub Actions performs:
+GitHub Actions validates several profile combinations and builds every maintained PHP runtime plus the Node runtime.
 
-* Docker Compose configuration validation
-* PHP 8.2 image build
-* PHP 8.5 image build
-* Node image build
+This helps catch invalid Compose dependencies and runtime-specific Dockerfile problems before changes reach `main`.
 
-The build matrix runs independently, so a failure in one runtime does not hide failures in the others.
+## Roadmap
 
-## Why Dockavel?
+The next major step is project-level configuration, for example:
 
-Running every project with a completely separate Docker stack can create duplicated containers, duplicated databases, port conflicts, and unnecessary local resource usage.
+```yaml
+name: ledger
+local_domain: ledger.local
+php: "8.5"
+database: postgres
+redis: true
+node: false
+```
 
-Dockavel provides shared infrastructure while still allowing each application to keep its own source code, domain, runtime choice, and process configuration.
+The goal is for Dockavel to generate Nginx configuration and project metadata through a command such as:
 
-It is intended as a practical development environment rather than a production deployment platform.
+```bash
+./dockavel project:add
+```
 
 ## License
 
-Dockavel is open-source software licensed under the MIT License.
+MIT
