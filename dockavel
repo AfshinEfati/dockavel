@@ -54,8 +54,53 @@ print_row() {
     fi
 }
 
+curl_error_detail() {
+    local code="$1" message="${2:-}"
+
+    case "$code" in
+        5) printf 'proxy DNS failure' ;;
+        6) printf 'DNS resolution failed' ;;
+        7) printf 'TCP connection failed' ;;
+        28) printf 'timeout' ;;
+        35) printf 'TLS handshake failed' ;;
+        47) printf 'too many redirects' ;;
+        52) printf 'empty response' ;;
+        56) printf 'connection reset / receive failed' ;;
+        60) printf 'TLS certificate validation failed' ;;
+        *)
+            if [[ -n "$message" ]]; then
+                printf 'curl %s · %s' "$code" "$message"
+            else
+                printf 'curl error %s' "$code"
+            fi
+            ;;
+    esac
+}
+
+run_curl_probe() {
+    local url="$1" family="${2:-auto}" result rc stderr_file stderr_text family_args=()
+
+    [[ "$family" == "ipv4" ]] && family_args=(-4)
+
+    stderr_file="$(mktemp)"
+    result="$(curl "${family_args[@]}" -k -L -sS -o /dev/null \
+        --connect-timeout 5 \
+        --max-time 12 \
+        -w '%{http_code}|%{time_total}|%{remote_ip}' \
+        "$url" 2>"$stderr_file")"
+    rc=$?
+    stderr_text="$(tr '\n' ' ' < "$stderr_file" | sed -E 's/[[:space:]]+$//')"
+    rm -f "$stderr_file"
+
+    CURL_RESULT="$result"
+    CURL_RC="$rc"
+    CURL_STDERR="$stderr_text"
+
+    return "$rc"
+}
+
 http_probe() {
-    local url="$1" code time_total
+    local url="$1" code time_total remote_ip failure_detail
 
     if ! command -v curl >/dev/null 2>&1; then
         PROBE_STATUS="missing-curl"
@@ -63,28 +108,36 @@ http_probe() {
         return 2
     fi
 
-    local result
-    result="$(curl -k -L -sS -o /dev/null \
-        --connect-timeout 5 \
-        --max-time 12 \
-        -w '%{http_code} %{time_total}' \
-        "$url" 2>/dev/null)" || {
-        PROBE_STATUS="failed"
-        PROBE_DETAIL="connection failed"
-        return 1
-    }
+    if ! run_curl_probe "$url" auto; then
+        failure_detail="$(curl_error_detail "$CURL_RC" "$CURL_STDERR")"
 
-    code="${result%% *}"
-    time_total="${result#* }"
+        # Restricted or partially broken networks sometimes advertise IPv6 even
+        # when the route is unusable. A read-only IPv4 retry helps identify that
+        # case without changing DNS or system configuration.
+        if run_curl_probe "$url" ipv4; then
+            IFS='|' read -r code time_total remote_ip <<< "$CURL_RESULT"
+            if [[ "$code" =~ ^(2|3)[0-9][0-9]$ || "$code" == "401" || "$code" == "403" ]]; then
+                PROBE_STATUS="ipv4-only"
+                PROBE_DETAIL="IPv4 works · HTTP $code · ${time_total}s${remote_ip:+ · $remote_ip}"
+                return 3
+            fi
+        fi
+
+        PROBE_STATUS="failed"
+        PROBE_DETAIL="$failure_detail"
+        return 1
+    fi
+
+    IFS='|' read -r code time_total remote_ip <<< "$CURL_RESULT"
 
     if [[ "$code" =~ ^(2|3)[0-9][0-9]$ || "$code" == "401" || "$code" == "403" ]]; then
         PROBE_STATUS="ok"
-        PROBE_DETAIL="HTTP $code · ${time_total}s"
+        PROBE_DETAIL="HTTP $code · ${time_total}s${remote_ip:+ · $remote_ip}"
         return 0
     fi
 
     PROBE_STATUS="failed"
-    PROBE_DETAIL="HTTP $code · ${time_total}s"
+    PROBE_DETAIL="HTTP $code · ${time_total}s${remote_ip:+ · $remote_ip}"
     return 1
 }
 
@@ -105,12 +158,14 @@ probe_row() {
 
     if http_probe "$url"; then
         print_row "$label" "$OK" "$PROBE_DETAIL"
-    else
-        case "$PROBE_STATUS" in
-            missing-curl) print_row "$label" "$WARN" "$PROBE_DETAIL" ;;
-            *) print_row "$label" "$FAIL" "$PROBE_DETAIL" ;;
-        esac
+        return 0
     fi
+
+    case "$PROBE_STATUS" in
+        missing-curl) print_row "$label" "$WARN" "$PROBE_DETAIL" ;;
+        ipv4-only) print_row "$label" "$WARN" "$PROBE_DETAIL" ;;
+        *) print_row "$label" "$FAIL" "$PROBE_DETAIL" ;;
+    esac
 }
 
 source_test() {
@@ -247,6 +302,7 @@ doctor() {
     printf '\nNotes\n-----\n'
     printf '%s Doctor is read-only: it does not change .env, Docker, DNS, mirrors or containers.\n' "$INFO"
     printf '%s Network failures reported here should be investigated before rebuilding the stack.\n' "$INFO"
+    printf '%s If a source reports "IPv4 works", the default/IPv6 route is likely broken while IPv4 is usable.\n' "$INFO"
 }
 
 main() {
