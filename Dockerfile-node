@@ -1,8 +1,10 @@
 ARG DOCKER_LIBRARY_PREFIX=
 FROM ${DOCKER_LIBRARY_PREFIX}node:24-bookworm-slim
 
-ARG DEBIAN_MIRROR=https://deb.debian.org/debian
-ARG DEBIAN_SECURITY_MIRROR=https://deb.debian.org/debian-security
+# Use HTTP for the initial apt bootstrap. Slim base images may not contain a
+# usable CA bundle yet; apt still verifies Debian repository signatures.
+ARG DEBIAN_MIRROR=http://deb.debian.org/debian
+ARG DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security
 ARG NPM_REGISTRY=https://registry.npmjs.org/
 ARG NPM_STRICT_SSL=true
 
