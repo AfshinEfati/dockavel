@@ -22,10 +22,40 @@ if ! docker compose version >/dev/null 2>&1; then
     exit 1
 fi
 
+if [[ ! -t 0 || ! -t 1 ]]; then
+    echo "Error: Dockavel setup requires an interactive terminal."
+    exit 1
+fi
+
 if [[ ! -f "$ENV_FILE" ]]; then
     cp "$ENV_EXAMPLE" "$ENV_FILE"
     echo "Created $ENV_FILE from $ENV_EXAMPLE."
 fi
+
+# Keep existing local values, but add newly introduced settings from .env.example.
+# This lets existing Dockavel installations upgrade without replacing their .env.
+sync_env_defaults() {
+    local line
+    local key
+    local added=0
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+            key="${BASH_REMATCH[1]}"
+            if ! grep -q "^${key}=" "$ENV_FILE"; then
+                if [[ "$added" -eq 0 ]]; then
+                    printf '\n# Added automatically by Dockavel setup\n' >> "$ENV_FILE"
+                fi
+                printf '%s\n' "$line" >> "$ENV_FILE"
+                added=$((added + 1))
+            fi
+        fi
+    done < "$ENV_EXAMPLE"
+
+    if [[ "$added" -gt 0 ]]; then
+        echo "Added $added missing setting(s) to $ENV_FILE without changing existing values."
+    fi
+}
 
 set_env_value() {
     local key="$1"
@@ -52,28 +82,6 @@ set_env_value() {
     mv "$tmp" "$ENV_FILE"
 }
 
-ask_yes_no() {
-    local prompt="$1"
-    local default="${2:-n}"
-    local answer
-
-    while true; do
-        if [[ "$default" == "y" ]]; then
-            read -r -p "$prompt [Y/n] " answer || true
-            answer="${answer:-y}"
-        else
-            read -r -p "$prompt [y/N] " answer || true
-            answer="${answer:-n}"
-        fi
-
-        case "${answer,,}" in
-            y|yes) return 0 ;;
-            n|no) return 1 ;;
-            *) echo "Please answer y or n." ;;
-        esac
-    done
-}
-
 add_profile() {
     local profile="$1"
     local existing
@@ -83,6 +91,173 @@ add_profile() {
     done
 
     PROFILES+=("$profile")
+}
+
+restore_cursor() {
+    printf '\033[?25h' 2>/dev/null || true
+}
+
+trap restore_cursor EXIT INT TERM
+
+# Result is returned in the global MULTI_SELECTED array as zero-based indexes.
+# Controls: Up/Down or k/j to move, Space to toggle, Enter to confirm.
+multiselect() {
+    local title="$1"
+    local minimum="$2"
+    local defaults_csv="$3"
+    shift 3
+
+    local -a items=("$@")
+    local -a checked=()
+    local -a defaults=()
+    local cursor=0
+    local key=""
+    local rest=""
+    local i
+    local selected_count
+    local first_render=1
+
+    for ((i = 0; i < ${#items[@]}; i++)); do
+        checked[i]=0
+    done
+
+    if [[ -n "$defaults_csv" ]]; then
+        IFS=',' read -r -a defaults <<< "$defaults_csv"
+        for i in "${defaults[@]}"; do
+            if [[ "$i" =~ ^[0-9]+$ ]] && (( i >= 0 && i < ${#items[@]} )); then
+                checked[i]=1
+            fi
+        done
+    fi
+
+    printf '\n%s\n' "$title"
+    printf '%*s\n' "${#title}" '' | tr ' ' '-'
+    printf 'Use ↑/↓ to move, Space to select, Enter to confirm.\n\n'
+    printf '\033[?25l'
+
+    while true; do
+        if [[ "$first_render" -eq 0 ]]; then
+            printf '\033[%dA' "${#items[@]}"
+        fi
+        first_render=0
+
+        for ((i = 0; i < ${#items[@]}; i++)); do
+            printf '\033[2K\r'
+            if (( i == cursor )); then
+                printf '❯ '
+            else
+                printf '  '
+            fi
+
+            if [[ "${checked[i]}" -eq 1 ]]; then
+                printf '[x] %s\n' "${items[i]}"
+            else
+                printf '[ ] %s\n' "${items[i]}"
+            fi
+        done
+
+        IFS= read -rsn1 key
+
+        case "$key" in
+            $'\x1b')
+                rest=""
+                IFS= read -rsn2 -t 0.1 rest || true
+                case "$rest" in
+                    '[A') cursor=$(( (cursor - 1 + ${#items[@]}) % ${#items[@]} )) ;;
+                    '[B') cursor=$(( (cursor + 1) % ${#items[@]} )) ;;
+                esac
+                ;;
+            k|K)
+                cursor=$(( (cursor - 1 + ${#items[@]}) % ${#items[@]} ))
+                ;;
+            j|J)
+                cursor=$(( (cursor + 1) % ${#items[@]} ))
+                ;;
+            ' ')
+                if [[ "${checked[cursor]}" -eq 1 ]]; then
+                    checked[cursor]=0
+                else
+                    checked[cursor]=1
+                fi
+                ;;
+            '')
+                selected_count=0
+                for ((i = 0; i < ${#items[@]}; i++)); do
+                    [[ "${checked[i]}" -eq 1 ]] && selected_count=$((selected_count + 1))
+                done
+
+                if (( selected_count < minimum )); then
+                    printf '\a'
+                    continue
+                fi
+
+                MULTI_SELECTED=()
+                for ((i = 0; i < ${#items[@]}; i++)); do
+                    [[ "${checked[i]}" -eq 1 ]] && MULTI_SELECTED+=("$i")
+                done
+                printf '\033[?25h\n'
+                return 0
+                ;;
+        esac
+    done
+}
+
+# Result is returned in the global CHOICE_INDEX variable as a zero-based index.
+choose_one() {
+    local title="$1"
+    local default_index="$2"
+    shift 2
+
+    local -a items=("$@")
+    local cursor="$default_index"
+    local key=""
+    local rest=""
+    local i
+    local first_render=1
+
+    printf '\n%s\n' "$title"
+    printf '%*s\n' "${#title}" '' | tr ' ' '-'
+    printf 'Use ↑/↓ to move and Enter to confirm.\n\n'
+    printf '\033[?25l'
+
+    while true; do
+        if [[ "$first_render" -eq 0 ]]; then
+            printf '\033[%dA' "${#items[@]}"
+        fi
+        first_render=0
+
+        for ((i = 0; i < ${#items[@]}; i++)); do
+            printf '\033[2K\r'
+            if (( i == cursor )); then
+                printf '❯ (●) %s\n' "${items[i]}"
+            else
+                printf '  ( ) %s\n' "${items[i]}"
+            fi
+        done
+
+        IFS= read -rsn1 key
+        case "$key" in
+            $'\x1b')
+                rest=""
+                IFS= read -rsn2 -t 0.1 rest || true
+                case "$rest" in
+                    '[A') cursor=$(( (cursor - 1 + ${#items[@]}) % ${#items[@]} )) ;;
+                    '[B') cursor=$(( (cursor + 1) % ${#items[@]} )) ;;
+                esac
+                ;;
+            k|K)
+                cursor=$(( (cursor - 1 + ${#items[@]}) % ${#items[@]} ))
+                ;;
+            j|J)
+                cursor=$(( (cursor + 1) % ${#items[@]} ))
+                ;;
+            '')
+                CHOICE_INDEX="$cursor"
+                printf '\033[?25h\n'
+                return 0
+                ;;
+        esac
+    done
 }
 
 print_header() {
@@ -97,97 +272,14 @@ Multiple PHP versions can run at the same time.
 EOF
 }
 
-select_php_versions() {
-    local input
-    local choice
-    local invalid
-
-    while true; do
-        cat <<'EOF'
-
-PHP runtimes
-------------
-1) PHP 8.2
-2) PHP 8.3
-3) PHP 8.4
-4) PHP 8.5
-EOF
-        read -r -p "Select one or more versions (example: 1 4): " input
-        input="${input//,/ }"
-        invalid=0
-        PHP_LABELS=()
-        PHP_PROFILES=()
-
-        for choice in $input; do
-            case "$choice" in
-                1) PHP_PROFILES+=("php82"); PHP_LABELS+=("8.2") ;;
-                2) PHP_PROFILES+=("php83"); PHP_LABELS+=("8.3") ;;
-                3) PHP_PROFILES+=("php84"); PHP_LABELS+=("8.4") ;;
-                4) PHP_PROFILES+=("php85"); PHP_LABELS+=("8.5") ;;
-                *) echo "Unknown PHP option: $choice"; invalid=1 ;;
-            esac
-        done
-
-        if [[ "$invalid" -eq 0 && "${#PHP_PROFILES[@]}" -gt 0 ]]; then
-            break
-        fi
-
-        echo "Select at least one valid PHP runtime."
-    done
-
-    for choice in "${PHP_PROFILES[@]}"; do
-        add_profile "$choice"
-    done
-}
-
-select_databases() {
-    local input
-    local choice
-    local invalid
-
-    MYSQL_ENABLED=0
-    POSTGRES_ENABLED=0
-
-    while true; do
-        cat <<'EOF'
-
-Databases
----------
-1) MySQL 8
-2) PostgreSQL 17
-
-Press Enter if you do not need a database.
-EOF
-        read -r -p "Select databases (example: 1 2): " input
-        input="${input//,/ }"
-        invalid=0
-        MYSQL_ENABLED=0
-        POSTGRES_ENABLED=0
-
-        if [[ -z "${input// }" ]]; then
-            break
-        fi
-
-        for choice in $input; do
-            case "$choice" in
-                1) MYSQL_ENABLED=1 ;;
-                2) POSTGRES_ENABLED=1 ;;
-                *) echo "Unknown database option: $choice"; invalid=1 ;;
-            esac
-        done
-
-        [[ "$invalid" -eq 0 ]] && break
-    done
-
-    [[ "$MYSQL_ENABLED" -eq 1 ]] && add_profile "mysql"
-    [[ "$POSTGRES_ENABLED" -eq 1 ]] && add_profile "postgres"
-}
-
+sync_env_defaults
 print_header
 
 PROFILES=()
 PHP_PROFILES=()
 PHP_LABELS=()
+MULTI_SELECTED=()
+CHOICE_INDEX=0
 MYSQL_ENABLED=0
 POSTGRES_ENABLED=0
 REDIS_ENABLED=0
@@ -195,27 +287,75 @@ NODE_ENABLED=0
 PHPMYADMIN_ENABLED=0
 PGADMIN_ENABLED=0
 
-select_php_versions
-select_databases
+multiselect "PHP runtimes" 1 "0,3" \
+    "PHP 8.2" \
+    "PHP 8.3" \
+    "PHP 8.4" \
+    "PHP 8.5"
 
-if ask_yes_no "Enable Redis?" "y"; then
-    REDIS_ENABLED=1
-    add_profile "redis"
+for index in "${MULTI_SELECTED[@]}"; do
+    case "$index" in
+        0) PHP_PROFILES+=("php82"); PHP_LABELS+=("8.2") ;;
+        1) PHP_PROFILES+=("php83"); PHP_LABELS+=("8.3") ;;
+        2) PHP_PROFILES+=("php84"); PHP_LABELS+=("8.4") ;;
+        3) PHP_PROFILES+=("php85"); PHP_LABELS+=("8.5") ;;
+    esac
+done
+
+for profile in "${PHP_PROFILES[@]}"; do
+    add_profile "$profile"
+done
+
+multiselect "Databases" 0 "0" \
+    "MySQL 8" \
+    "PostgreSQL 17"
+
+for index in "${MULTI_SELECTED[@]}"; do
+    case "$index" in
+        0) MYSQL_ENABLED=1; add_profile "mysql" ;;
+        1) POSTGRES_ENABLED=1; add_profile "postgres" ;;
+    esac
+done
+
+multiselect "Optional services" 0 "0,1" \
+    "Redis 7" \
+    "Node.js 24"
+
+for index in "${MULTI_SELECTED[@]}"; do
+    case "$index" in
+        0) REDIS_ENABLED=1; add_profile "redis" ;;
+        1) NODE_ENABLED=1; add_profile "node" ;;
+    esac
+done
+
+DB_TOOL_LABELS=()
+DB_TOOL_KEYS=()
+
+if [[ "$MYSQL_ENABLED" -eq 1 ]]; then
+    DB_TOOL_LABELS+=("phpMyAdmin")
+    DB_TOOL_KEYS+=("mysql-ui")
 fi
 
-if ask_yes_no "Enable Node.js?" "y"; then
-    NODE_ENABLED=1
-    add_profile "node"
+if [[ "$POSTGRES_ENABLED" -eq 1 ]]; then
+    DB_TOOL_LABELS+=("pgAdmin")
+    DB_TOOL_KEYS+=("postgres-ui")
 fi
 
-if [[ "$MYSQL_ENABLED" -eq 1 ]] && ask_yes_no "Enable phpMyAdmin?" "n"; then
-    PHPMYADMIN_ENABLED=1
-    add_profile "mysql-ui"
-fi
+if [[ "${#DB_TOOL_LABELS[@]}" -gt 0 ]]; then
+    multiselect "Database tools" 0 "" "${DB_TOOL_LABELS[@]}"
 
-if [[ "$POSTGRES_ENABLED" -eq 1 ]] && ask_yes_no "Enable pgAdmin?" "n"; then
-    PGADMIN_ENABLED=1
-    add_profile "postgres-ui"
+    for index in "${MULTI_SELECTED[@]}"; do
+        case "${DB_TOOL_KEYS[index]}" in
+            mysql-ui)
+                PHPMYADMIN_ENABLED=1
+                add_profile "mysql-ui"
+                ;;
+            postgres-ui)
+                PGADMIN_ENABLED=1
+                add_profile "postgres-ui"
+                ;;
+        esac
+    done
 fi
 
 PROFILES_CSV="$(IFS=,; echo "${PROFILES[*]}")"
@@ -231,9 +371,13 @@ printf 'Redis        : %s\n' "$([[ "$REDIS_ENABLED" -eq 1 ]] && echo Yes || echo
 printf 'Node.js      : %s\n' "$([[ "$NODE_ENABLED" -eq 1 ]] && echo Yes || echo No)"
 printf 'phpMyAdmin   : %s\n' "$([[ "$PHPMYADMIN_ENABLED" -eq 1 ]] && echo Yes || echo No)"
 printf 'pgAdmin      : %s\n' "$([[ "$PGADMIN_ENABLED" -eq 1 ]] && echo Yes || echo No)"
-printf '\nCOMPOSE_PROFILES=%s\n\n' "$PROFILES_CSV"
+printf '\nCOMPOSE_PROFILES=%s\n' "$PROFILES_CSV"
 
-if ask_yes_no "Build and start the selected stack now?" "y"; then
+choose_one "Build and start the selected stack now?" 0 \
+    "Yes, build and start" \
+    "No, save configuration only"
+
+if [[ "$CHOICE_INDEX" -eq 0 ]]; then
     docker compose up -d --build
     echo
     docker compose ps
