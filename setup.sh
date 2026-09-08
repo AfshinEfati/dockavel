@@ -32,8 +32,6 @@ if [[ ! -f "$ENV_FILE" ]]; then
     echo "Created $ENV_FILE from $ENV_EXAMPLE."
 fi
 
-# Keep existing local values, but add newly introduced settings from .env.example.
-# This lets existing Dockavel installations upgrade without replacing their .env.
 sync_env_defaults() {
     local line
     local key
@@ -82,6 +80,24 @@ set_env_value() {
     mv "$tmp" "$ENV_FILE"
 }
 
+migrate_legacy_defaults() {
+    local migrated=0
+
+    if grep -qx 'DEBIAN_MIRROR=http://deb.debian.org/debian' "$ENV_FILE"; then
+        set_env_value "DEBIAN_MIRROR" "https://deb.debian.org/debian"
+        migrated=$((migrated + 1))
+    fi
+
+    if grep -qx 'DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security' "$ENV_FILE"; then
+        set_env_value "DEBIAN_SECURITY_MIRROR" "https://deb.debian.org/debian-security"
+        migrated=$((migrated + 1))
+    fi
+
+    if [[ "$migrated" -gt 0 ]]; then
+        echo "Updated $migrated legacy Debian mirror setting(s) from HTTP to HTTPS."
+    fi
+}
+
 add_profile() {
     local profile="$1"
     local existing
@@ -99,8 +115,6 @@ restore_cursor() {
 
 trap restore_cursor EXIT INT TERM
 
-# Result is returned in the global MULTI_SELECTED array as zero-based indexes.
-# Controls: Up/Down or k/j to move, Space to toggle, Enter to confirm.
 multiselect() {
     local title="$1"
     local minimum="$2"
@@ -167,12 +181,8 @@ multiselect() {
                     '[B') cursor=$(( (cursor + 1) % ${#items[@]} )) ;;
                 esac
                 ;;
-            k|K)
-                cursor=$(( (cursor - 1 + ${#items[@]}) % ${#items[@]} ))
-                ;;
-            j|J)
-                cursor=$(( (cursor + 1) % ${#items[@]} ))
-                ;;
+            k|K) cursor=$(( (cursor - 1 + ${#items[@]}) % ${#items[@]} )) ;;
+            j|J) cursor=$(( (cursor + 1) % ${#items[@]} )) ;;
             ' ')
                 if [[ "${checked[cursor]}" -eq 1 ]]; then
                     checked[cursor]=0
@@ -202,7 +212,6 @@ multiselect() {
     done
 }
 
-# Result is returned in the global CHOICE_INDEX variable as a zero-based index.
 choose_one() {
     local title="$1"
     local default_index="$2"
@@ -245,12 +254,8 @@ choose_one() {
                     '[B') cursor=$(( (cursor + 1) % ${#items[@]} )) ;;
                 esac
                 ;;
-            k|K)
-                cursor=$(( (cursor - 1 + ${#items[@]}) % ${#items[@]} ))
-                ;;
-            j|J)
-                cursor=$(( (cursor + 1) % ${#items[@]} ))
-                ;;
+            k|K) cursor=$(( (cursor - 1 + ${#items[@]}) % ${#items[@]} )) ;;
+            j|J) cursor=$(( (cursor + 1) % ${#items[@]} )) ;;
             '')
                 CHOICE_INDEX="$cursor"
                 printf '\033[?25h\n'
@@ -273,6 +278,7 @@ EOF
 }
 
 sync_env_defaults
+migrate_legacy_defaults
 print_header
 
 PROFILES=()
