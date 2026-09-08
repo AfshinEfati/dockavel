@@ -11,8 +11,16 @@ on:
 
 jobs:
   compose-validation:
-    name: Validate Docker Compose
+    name: Validate Compose (${{ matrix.profiles }})
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        profiles:
+          - php82,mysql,redis
+          - php85,postgres,redis,node
+          - php82,php83,php84,php85,mysql,postgres,redis,node,mysql-ui,postgres-ui
 
     steps:
       - name: Checkout repository
@@ -22,7 +30,7 @@ jobs:
         run: cp .env.example .env
 
       - name: Validate Docker Compose
-        run: docker compose config
+        run: COMPOSE_PROFILES="${{ matrix.profiles }}" docker compose config
 
   build-images:
     name: Build ${{ matrix.service }}
@@ -31,10 +39,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service:
-          - php
-          - php85
-          - node
+        include:
+          - service: php82
+            profile: php82
+          - service: php83
+            profile: php83
+          - service: php84
+            profile: php84
+          - service: php85
+            profile: php85
+          - service: node
+            profile: node
 
     steps:
       - name: Checkout repository
@@ -44,4 +59,4 @@ jobs:
         run: cp .env.example .env
 
       - name: Build ${{ matrix.service }}
-        run: docker compose build --pull ${{ matrix.service }}
+        run: docker compose --profile "${{ matrix.profile }}" build --pull "${{ matrix.service }}"

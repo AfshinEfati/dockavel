@@ -1,54 +1,83 @@
+x-php-common: &php-common
+  restart: unless-stopped
+  volumes:
+    - ./projects:/var/www
+  networks:
+    - dev
+  user: "${UID}:${GID}"
+  environment:
+    HOME: /var/www
+    COMPOSER_HOME: /opt/composer
+    COMPOSER_CACHE_DIR: /var/www/.composer-cache
+    COMPOSER_PROCESS_TIMEOUT: 600
+    PSYSH_CONFIG_DIR: /var/www/.psysh
+    XDG_CONFIG_HOME: /var/www/.config
+    XDG_DATA_HOME: /var/www/.local/share
+
+x-php-build-args: &php-build-args
+  UID: ${UID}
+  GID: ${GID}
+  PIE_IMAGE: ${PIE_IMAGE}
+  DEBIAN_MIRROR: ${DEBIAN_MIRROR}
+  DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR}
+  COMPOSER_REPOSITORY: ${COMPOSER_REPOSITORY}
+
 services:
-  php:
+  php82:
+    <<: *php-common
+    profiles:
+      - php82
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        UID: ${UID}
-        GID: ${GID}
-        PIE_IMAGE: ${PIE_IMAGE}
-        DEBIAN_MIRROR: ${DEBIAN_MIRROR}
-        DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR}
-        COMPOSER_REPOSITORY: ${COMPOSER_REPOSITORY}
-    container_name: php
-    volumes:
-      - ./projects:/var/www
+        <<: *php-build-args
+        PHP_VERSION: "8.2"
+    container_name: dockavel-php82
     networks:
-      - dev
-    user: "${UID}:${GID}"
-    environment:
-      HOME: /var/www
-      COMPOSER_HOME: /opt/composer
-      COMPOSER_CACHE_DIR: /var/www/.composer-cache
-      COMPOSER_PROCESS_TIMEOUT: 600
+      dev:
+        aliases:
+          - php
 
-  php85:
+  php83:
+    <<: *php-common
+    profiles:
+      - php83
     build:
       context: .
-      dockerfile: Dockerfile-php85
+      dockerfile: Dockerfile
       args:
-        UID: ${UID}
-        GID: ${GID}
-        PIE_IMAGE: ${PIE_IMAGE}
-        DEBIAN_MIRROR: ${DEBIAN_MIRROR}
-        DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR}
-        COMPOSER_REPOSITORY: ${COMPOSER_REPOSITORY}
-    container_name: php85
-    volumes:
-      - ./projects:/var/www
-    networks:
-      - dev
-    user: "${UID}:${GID}"
-    environment:
-      HOME: /var/www
-      COMPOSER_HOME: /opt/composer
-      COMPOSER_CACHE_DIR: /var/www/.composer-cache
-      COMPOSER_PROCESS_TIMEOUT: 600
-      PSYSH_CONFIG_DIR: /var/www/.psysh
-      XDG_CONFIG_HOME: /var/www/.config
-      XDG_DATA_HOME: /var/www/.local/share
+        <<: *php-build-args
+        PHP_VERSION: "8.3"
+    container_name: dockavel-php83
+
+  php84:
+    <<: *php-common
+    profiles:
+      - php84
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        <<: *php-build-args
+        PHP_VERSION: "8.4"
+    container_name: dockavel-php84
+
+  php85:
+    <<: *php-common
+    profiles:
+      - php85
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        <<: *php-build-args
+        PHP_VERSION: "8.5"
+    container_name: dockavel-php85
 
   node:
+    profiles:
+      - node
     build:
       context: .
       dockerfile: Dockerfile-node
@@ -58,7 +87,7 @@ services:
         DEBIAN_MIRROR: ${DEBIAN_MIRROR}
         DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR}
         NPM_REGISTRY: ${NPM_REGISTRY}
-    container_name: node
+    container_name: dockavel-node
     restart: unless-stopped
     init: true
     user: "${UID}:${GID}"
@@ -71,7 +100,6 @@ services:
       - dev
     environment:
       HOME: /var/www
-
       NPM_CONFIG_REGISTRY: ${NPM_REGISTRY}
       npm_config_registry: ${NPM_REGISTRY}
       NPM_CONFIG_CACHE: /var/www/.npm-cache
@@ -84,15 +112,16 @@ services:
       NPM_CONFIG_AUDIT: "false"
       NPM_CONFIG_FUND: "false"
       NPM_CONFIG_PROGRESS: "false"
-
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
     expose:
       - "3000-3099"
 
   redis:
-    image: redis:alpine
-    container_name: redis
+    profiles:
+      - redis
+    image: redis:7-alpine
+    container_name: dockavel-redis
     restart: unless-stopped
     ports:
       - "127.0.0.1:${REDIS_PORT:-16379}:6379"
@@ -100,75 +129,90 @@ services:
       - dev
 
   mysql:
+    profiles:
+      - mysql
     image: mysql:8.0
+    container_name: dockavel-mysql
     restart: unless-stopped
-
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-
     ports:
       - "127.0.0.1:${MYSQL_PORT:-13307}:3306"
-
     volumes:
       - mysql_data:/var/lib/mysql
-
     networks:
-    - dev
+      - dev
+
+  postgres:
+    profiles:
+      - postgres
+    image: postgres:17-alpine
+    container_name: dockavel-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-15432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dev
 
   phpmyadmin:
+    profiles:
+      - mysql-ui
     image: phpmyadmin/phpmyadmin
+    container_name: dockavel-phpmyadmin
     restart: unless-stopped
-
     environment:
       PMA_HOST: mysql
       PMA_PORT: 3306
-
     ports:
       - "127.0.0.1:${PHPMYADMIN_PORT:-18080}:80"
-
     depends_on:
       - mysql
+    networks:
+      - dev
 
+  pgadmin:
+    profiles:
+      - postgres-ui
+    image: dpage/pgadmin4:9
+    container_name: dockavel-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    ports:
+      - "127.0.0.1:${PGADMIN_PORT:-18081}:80"
+    depends_on:
+      - postgres
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
     networks:
       - dev
 
   nginx:
     image: nginx:alpine
-    container_name: nginx
-    depends_on:
-      - php
-      - node
+    container_name: dockavel-nginx
+    restart: unless-stopped
     ports:
       - "80:80"
     volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d
-      - ./projects:/var/www
-
-
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./projects:/var/www:ro
     networks:
       - dev
-
-  # traefik disabled - using nginx directly
-  # traefik:
-  #   image: traefik:v2.9
-  #   command:
-  #     - "--api.insecure=true"
-  #     - "--providers.docker=true"
-  #     - "--providers.docker.exposedbydefault=false"
-  #     - "--entrypoints.web.address=:80"
-  #   ports:
-  #     - "80:80"
-  #     - "8081:8080"
-  #   volumes:
-  #     - /var/run/docker.sock:/var/run/docker.sock
-  #   networks:
-  #     - dev
 
 networks:
   dev:
 
 volumes:
   mysql_data:
+  postgres_data:
+  pgadmin_data:

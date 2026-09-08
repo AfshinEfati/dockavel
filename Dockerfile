@@ -1,7 +1,9 @@
 ARG PIE_IMAGE=ghcr.io/php/pie:bin
+ARG PHP_VERSION=8.5
+
 FROM ${PIE_IMAGE} AS pie
 
-FROM php:8.2-fpm
+FROM php:${PHP_VERSION}-fpm
 
 ARG UID=1000
 ARG GID=1000
@@ -13,7 +15,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
     COMPOSER_ALLOW_SUPERUSER=1 \
     COMPOSER_HOME=/opt/composer \
     COMPOSER_CACHE_DIR=/var/www/.composer-cache \
-    COMPOSER_PROCESS_TIMEOUT=600
+    COMPOSER_PROCESS_TIMEOUT=600 \
+    HOME=/var/www \
+    PSYSH_CONFIG_DIR=/var/www/.psysh \
+    XDG_CONFIG_HOME=/var/www/.config \
+    XDG_DATA_HOME=/var/www/.local/share
+
+WORKDIR /var/www
 
 RUN set -eux; \
     if [ -f /etc/apt/sources.list ]; then \
@@ -47,11 +55,14 @@ RUN set -eux; \
         g++ \
         gcc \
         git \
-        gnupg2 \
+        gnupg \
+        libexif-dev \
         libfreetype6-dev \
+        libicu-dev \
         libjpeg-dev \
         libonig-dev \
         libpng-dev \
+        libpq-dev \
         libssl-dev \
         libtool \
         libxml2-dev \
@@ -64,11 +75,15 @@ RUN set -eux; \
         zip; \
     update-ca-certificates; \
     docker-php-ext-configure gd --with-freetype --with-jpeg; \
+    docker-php-ext-configure intl; \
     docker-php-ext-install -j"$(nproc)" \
+        exif \
         gd \
+        intl \
         mbstring \
         pcntl \
         pdo_mysql \
+        pdo_pgsql \
         zip; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
@@ -82,12 +97,27 @@ RUN set -eux; \
     pie repository:add composer "${COMPOSER_REPOSITORY}"; \
     pie install --no-cache "phpredis/phpredis:^6.3"; \
     php -m | grep -qx redis; \
+    if ! getent group "${GID}" >/dev/null 2>&1; then \
+        groupadd --gid "${GID}" app; \
+    fi; \
+    if ! getent passwd "${UID}" >/dev/null 2>&1; then \
+        useradd \
+            --uid "${UID}" \
+            --gid "${GID}" \
+            --home-dir /var/www \
+            --shell /bin/bash \
+            app; \
+    fi; \
     mkdir -p \
         /opt/composer \
-        /var/www/.composer-cache; \
+        /var/www/.composer-cache \
+        /var/www/.config/psysh \
+        /var/www/.local/share \
+        /var/www/.psysh; \
     composer config --global repos.packagist composer "${COMPOSER_REPOSITORY}"; \
     chown -R "${UID}:${GID}" \
         /opt/composer \
-        /var/www/.composer-cache
-
-WORKDIR /var/www
+        /var/www/.composer-cache \
+        /var/www/.config \
+        /var/www/.local \
+        /var/www/.psysh
