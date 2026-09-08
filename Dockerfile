@@ -20,6 +20,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 WORKDIR /var/www
 
+# Configure Debian mirrors independently so failures in later build steps do not
+# invalidate already downloaded package metadata and dependencies.
 RUN set -eux; \
     if [ -f /etc/apt/sources.list ]; then \
         sed -i \
@@ -42,9 +44,21 @@ RUN set -eux; \
                 -e "s|http://security.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
                 -e "s|https://security.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
                 {} +; \
-    fi; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends \
+    fi
+
+# Network operations use retries/timeouts because local development environments
+# are frequently built behind slow, unstable, proxied, or filtered connections.
+RUN set -eux; \
+    apt-get \
+        -o Acquire::Retries=5 \
+        -o Acquire::http::Timeout=60 \
+        -o Acquire::https::Timeout=60 \
+        update; \
+    apt-get \
+        -o Acquire::Retries=5 \
+        -o Acquire::http::Timeout=60 \
+        -o Acquire::https::Timeout=60 \
+        install -y --no-install-recommends \
         autoconf \
         automake \
         ca-certificates \
@@ -70,7 +84,11 @@ RUN set -eux; \
         re2c \
         unzip \
         zip; \
-    update-ca-certificates; \
+    update-ca-certificates
+
+# Build extensions bundled with the official PHP image separately. This layer is
+# cached even if a later PECL download fails.
+RUN set -eux; \
     docker-php-ext-configure gd --with-freetype --with-jpeg; \
     docker-php-ext-configure intl; \
     docker-php-ext-install -j"$(nproc)" \
@@ -81,12 +99,25 @@ RUN set -eux; \
         pcntl \
         pdo_mysql \
         pdo_pgsql \
-        zip; \
-    printf '\n\n\n\n\n\n' | pecl install redis; \
+        zip
+
+# Redis comes from PECL. Retry independently so a transient pecl.php.net failure
+# does not force Debian packages and PHP extensions to rebuild from scratch.
+RUN set -eux; \
+    installed=0; \
+    attempt=1; \
+    while [ "$attempt" -le 5 ]; do \
+        if printf '\n\n\n\n\n\n' | pecl install -f redis; then \
+            installed=1; \
+            break; \
+        fi; \
+        echo "PECL Redis install failed (attempt ${attempt}/5). Retrying in 10 seconds..."; \
+        attempt=$((attempt + 1)); \
+        sleep 10; \
+    done; \
+    [ "$installed" -eq 1 ]; \
     docker-php-ext-enable redis; \
-    php -m | grep -qx redis; \
-    apt-get clean; \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    php -m | grep -qx redis
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
@@ -114,4 +145,6 @@ RUN set -eux; \
         /var/www/.composer-cache \
         /var/www/.config \
         /var/www/.local \
-        /var/www/.psysh
+        /var/www/.psysh; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
