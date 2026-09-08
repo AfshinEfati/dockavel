@@ -1,15 +1,14 @@
-FROM node:24-bookworm-slim
+ARG DOCKER_LIBRARY_PREFIX=docker.io/library/
+FROM ${DOCKER_LIBRARY_PREFIX}node:24-bookworm-slim
 
-ARG UID=1000
-ARG GID=1000
-
-ARG DEBIAN_MIRROR=http://deb.debian.org/debian
-ARG DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security
+ARG DEBIAN_MIRROR=https://deb.debian.org/debian
+ARG DEBIAN_SECURITY_MIRROR=https://deb.debian.org/debian-security
 ARG NPM_REGISTRY=https://registry.npmjs.org/
+ARG NPM_STRICT_SSL=true
 
-ENV DEBIAN_FRONTEND=noninteractive \
-    NPM_CONFIG_REGISTRY=${NPM_REGISTRY} \
+ENV NPM_CONFIG_REGISTRY=${NPM_REGISTRY} \
     npm_config_registry=${NPM_REGISTRY} \
+    NPM_CONFIG_STRICT_SSL=${NPM_STRICT_SSL} \
     NPM_CONFIG_FETCH_RETRIES=20 \
     NPM_CONFIG_FETCH_RETRY_FACTOR=2 \
     NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
@@ -27,8 +26,6 @@ RUN set -eux; \
             -e "s|https://deb.debian.org/debian|${DEBIAN_MIRROR}|g" \
             -e "s|http://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
             -e "s|https://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
-            -e "s|http://security.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
-            -e "s|https://security.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
             /etc/apt/sources.list; \
     fi; \
     if [ -d /etc/apt/sources.list.d ]; then \
@@ -39,30 +36,10 @@ RUN set -eux; \
                 -e "s|https://deb.debian.org/debian|${DEBIAN_MIRROR}|g" \
                 -e "s|http://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
                 -e "s|https://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
-                -e "s|http://security.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
-                -e "s|https://security.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
                 {} +; \
     fi; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends \
-        bash \
-        ca-certificates \
-        curl \
-        g++ \
-        git \
-        make \
-        openssh-client \
-        python3 \
-        supervisor; \
-    update-ca-certificates; \
-    apt-get clean; \
-    rm -rf \
-        /var/lib/apt/lists/* \
-        /tmp/* \
-        /var/tmp/*
-
-RUN set -eux; \
     printf 'registry=%s\n' "${NPM_REGISTRY}" > /usr/local/etc/npmrc; \
+    printf 'strict-ssl=%s\n' "${NPM_STRICT_SSL}" >> /usr/local/etc/npmrc; \
     printf 'fetch-retries=20\n' >> /usr/local/etc/npmrc; \
     printf 'fetch-retry-factor=2\n' >> /usr/local/etc/npmrc; \
     printf 'fetch-retry-mintimeout=20000\n' >> /usr/local/etc/npmrc; \
@@ -71,30 +48,8 @@ RUN set -eux; \
     printf 'maxsockets=2\n' >> /usr/local/etc/npmrc; \
     printf 'audit=false\n' >> /usr/local/etc/npmrc; \
     printf 'fund=false\n' >> /usr/local/etc/npmrc; \
-    printf 'progress=false\n' >> /usr/local/etc/npmrc; \
-    node --version; \
-    npm --version; \
-    npm config get registry
-
-RUN set -eux; \
-    if [ "$(id -g node)" != "${GID}" ]; then \
-        groupmod --non-unique --gid "${GID}" node; \
-    fi; \
-    if [ "$(id -u node)" != "${UID}" ]; then \
-        usermod --non-unique --uid "${UID}" node; \
-    fi; \
-    mkdir -p \
-        /var/www \
-        /var/www/.npm-cache \
-        /var/www/.yarn-cache \
-        /var/www/.cache \
-        /var/www/.cache/corepack \
-        /home/node/.cache \
-        /home/node/.npm; \
-    chown -R node:node \
-        /var/www \
-        /home/node
+    printf 'progress=false\n' >> /usr/local/etc/npmrc
 
 WORKDIR /var/www
 
-CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/supervisord.conf"]
+CMD ["sleep", "infinity"]

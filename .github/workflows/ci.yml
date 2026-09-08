@@ -11,8 +11,16 @@ on:
 
 jobs:
   compose-validation:
-    name: Validate Docker Compose
+    name: Validate Compose (${{ matrix.profiles }})
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        profiles:
+          - php82,mysql,redis
+          - php85,postgres,redis,node
+          - php82,php83,php84,php85,mysql,postgres,redis,node,mysql-ui,postgres-ui
 
     steps:
       - name: Checkout repository
@@ -22,26 +30,80 @@ jobs:
         run: cp .env.example .env
 
       - name: Validate Docker Compose
-        run: docker compose config
+        run: COMPOSE_PROFILES="${{ matrix.profiles }}" docker compose config
 
-  build-images:
-    name: Build ${{ matrix.service }}
+  build-php:
+    name: Build PHP ${{ matrix.version }}
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        service:
-          - php
-          - php85
-          - node
+        version:
+          - "8.2"
+          - "8.3"
+          - "8.4"
+          - "8.5"
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Prepare environment
-        run: cp .env.example .env
+      - name: Build runtime
+        run: |
+          docker build \
+            --pull \
+            --build-arg PHP_VERSION="${{ matrix.version }}" \
+            --build-arg DOCKER_NAMESPACE_PREFIX="docker.io/" \
+            --build-arg DEBIAN_MIRROR="https://deb.debian.org/debian" \
+            --build-arg DEBIAN_SECURITY_MIRROR="https://deb.debian.org/debian-security" \
+            --build-arg COMPOSER_REPOSITORY="https://repo.packagist.org" \
+            --build-arg UID=1000 \
+            --build-arg GID=1000 \
+            --tag "dockavel-php:${{ matrix.version }}" \
+            .
 
-      - name: Build ${{ matrix.service }}
-        run: docker compose build --pull ${{ matrix.service }}
+      - name: Verify runtime
+        run: |
+          docker run --rm "dockavel-php:${{ matrix.version }}" php -v
+          docker run --rm "dockavel-php:${{ matrix.version }}" php -m | grep -qx redis
+          docker run --rm "dockavel-php:${{ matrix.version }}" php -m | grep -qx pdo_mysql
+          docker run --rm "dockavel-php:${{ matrix.version }}" php -m | grep -qx pdo_pgsql
+          docker run --rm "dockavel-php:${{ matrix.version }}" composer --version
+
+  build-node:
+    name: Build Node 24
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build runtime
+        run: |
+          docker build \
+            --pull \
+            --file Dockerfile-node \
+            --build-arg DOCKER_LIBRARY_PREFIX="docker.io/library/" \
+            --build-arg DEBIAN_MIRROR="https://deb.debian.org/debian" \
+            --build-arg DEBIAN_SECURITY_MIRROR="https://deb.debian.org/debian-security" \
+            --build-arg NPM_REGISTRY="https://registry.npmjs.org/" \
+            --build-arg NPM_STRICT_SSL=true \
+            --tag dockavel-node:24 \
+            .
+
+      - name: Verify runtime
+        run: |
+          docker run --rm --entrypoint node dockavel-node:24 --version
+          docker run --rm --entrypoint npm dockavel-node:24 --version
+
+  shell-validation:
+    name: Validate shell scripts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Bash syntax
+        run: bash -n setup.sh
