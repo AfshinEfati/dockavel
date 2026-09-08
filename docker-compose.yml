@@ -4,23 +4,41 @@ x-php-common: &php-common
     - ./projects:/var/www
   networks:
     - dev
-  user: "${UID}:${GID}"
   environment:
     HOME: /var/www
-    COMPOSER_HOME: /var/www/.composer
-    COMPOSER_CACHE_DIR: /var/www/.composer-cache
+    COMPOSER_HOME: /opt/dockavel/composer
+    COMPOSER_CACHE_DIR: /var/cache/composer
     COMPOSER_PROCESS_TIMEOUT: 600
-    COMPOSER_REPOSITORY: ${COMPOSER_REPOSITORY}
     PSYSH_CONFIG_DIR: /var/www/.psysh
     XDG_CONFIG_HOME: /var/www/.config
     XDG_DATA_HOME: /var/www/.local/share
+
+x-php-build: &php-build
+  context: .
+  dockerfile: Dockerfile
+  args:
+    UID: ${UID}
+    GID: ${GID}
+    DOCKER_NAMESPACE_PREFIX: ${DOCKER_NAMESPACE_PREFIX}
+    DEBIAN_MIRROR: ${DEBIAN_MIRROR}
+    DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR}
+    COMPOSER_REPOSITORY: ${COMPOSER_REPOSITORY}
 
 services:
   php82:
     <<: *php-common
     profiles:
       - php82
-    image: ${DOCKAVEL_RUNTIME_PREFIX}dockavel-php:8.2
+    build:
+      <<: *php-build
+      args:
+        UID: ${UID}
+        GID: ${GID}
+        DOCKER_NAMESPACE_PREFIX: ${DOCKER_NAMESPACE_PREFIX}
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR}
+        DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR}
+        COMPOSER_REPOSITORY: ${COMPOSER_REPOSITORY}
+        PHP_VERSION: "8.2"
     container_name: dockavel-php82
     networks:
       dev:
@@ -31,27 +49,62 @@ services:
     <<: *php-common
     profiles:
       - php83
-    image: ${DOCKAVEL_RUNTIME_PREFIX}dockavel-php:8.3
+    build:
+      <<: *php-build
+      args:
+        UID: ${UID}
+        GID: ${GID}
+        DOCKER_NAMESPACE_PREFIX: ${DOCKER_NAMESPACE_PREFIX}
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR}
+        DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR}
+        COMPOSER_REPOSITORY: ${COMPOSER_REPOSITORY}
+        PHP_VERSION: "8.3"
     container_name: dockavel-php83
 
   php84:
     <<: *php-common
     profiles:
       - php84
-    image: ${DOCKAVEL_RUNTIME_PREFIX}dockavel-php:8.4
+    build:
+      <<: *php-build
+      args:
+        UID: ${UID}
+        GID: ${GID}
+        DOCKER_NAMESPACE_PREFIX: ${DOCKER_NAMESPACE_PREFIX}
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR}
+        DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR}
+        COMPOSER_REPOSITORY: ${COMPOSER_REPOSITORY}
+        PHP_VERSION: "8.4"
     container_name: dockavel-php84
 
   php85:
     <<: *php-common
     profiles:
       - php85
-    image: ${DOCKAVEL_RUNTIME_PREFIX}dockavel-php:8.5
+    build:
+      <<: *php-build
+      args:
+        UID: ${UID}
+        GID: ${GID}
+        DOCKER_NAMESPACE_PREFIX: ${DOCKER_NAMESPACE_PREFIX}
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR}
+        DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR}
+        COMPOSER_REPOSITORY: ${COMPOSER_REPOSITORY}
+        PHP_VERSION: "8.5"
     container_name: dockavel-php85
 
   node:
     profiles:
       - node
-    image: ${DOCKAVEL_RUNTIME_PREFIX}dockavel-node:24
+    build:
+      context: .
+      dockerfile: Dockerfile-node
+      args:
+        DOCKER_LIBRARY_PREFIX: ${DOCKER_LIBRARY_PREFIX}
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR}
+        DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR}
+        NPM_REGISTRY: ${NPM_REGISTRY}
+        NPM_STRICT_SSL: ${NPM_STRICT_SSL}
     container_name: dockavel-node
     restart: unless-stopped
     init: true
@@ -59,8 +112,6 @@ services:
     working_dir: /var/www
     volumes:
       - ./projects:/var/www
-      - ./supervisor/supervisord.conf:/etc/supervisor/supervisord.conf:ro
-      - ./supervisor/conf.d:/etc/supervisor/conf.d:ro
     networks:
       - dev
     environment:
