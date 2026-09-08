@@ -149,6 +149,19 @@ registry_probe_url() {
     [[ -n "$host" ]] && printf 'https://%s/v2/' "$host"
 }
 
+composer_probe_url() {
+    local url="$1"
+    url="${url%/}"
+
+    [[ -n "$url" ]] || return 0
+
+    if [[ "$url" == */packages.json ]]; then
+        printf '%s' "$url"
+    else
+        printf '%s/packages.json' "$url"
+    fi
+}
+
 probe_row() {
     local label="$1" url="$2"
     if [[ -z "$url" ]]; then
@@ -169,7 +182,7 @@ probe_row() {
 }
 
 source_test() {
-    local preset docker_library docker_namespace debian debian_security composer npm registry_url
+    local preset docker_library docker_namespace debian debian_security composer npm registry_url composer_url
 
     preset="$(load_env_value DOWNLOAD_SOURCE_PRESET)"
     docker_library="$(load_env_value DOCKER_LIBRARY_PREFIX)"
@@ -180,13 +193,14 @@ source_test() {
     npm="$(load_env_value NPM_REGISTRY)"
 
     registry_url="$(registry_probe_url "${docker_namespace:-$docker_library}")"
+    composer_url="$(composer_probe_url "$composer")"
 
     printf '\nDownload source\n---------------\n'
     print_row "Selected preset" "$INFO" "${preset:-unknown}"
     probe_row "Docker registry" "$registry_url"
     probe_row "Debian mirror" "$debian"
     probe_row "Debian security" "$debian_security"
-    probe_row "Composer" "$composer"
+    probe_row "Composer" "$composer_url"
     probe_row "npm" "$npm"
 }
 
