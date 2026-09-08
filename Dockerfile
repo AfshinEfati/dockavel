@@ -6,8 +6,10 @@ FROM ${GHCR_PREFIX}php/pie:bin AS pie
 FROM ${DOCKER_LIBRARY_PREFIX}composer:2 AS composer
 FROM ${DOCKER_LIBRARY_PREFIX}php:${PHP_VERSION}-fpm
 
-ARG DEBIAN_MIRROR=https://deb.debian.org/debian
-ARG DEBIAN_SECURITY_MIRROR=https://deb.debian.org/debian-security
+# Use HTTP for the initial apt bootstrap. Slim base images may not contain a
+# usable CA bundle yet; apt still verifies Debian repository signatures.
+ARG DEBIAN_MIRROR=http://deb.debian.org/debian
+ARG DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security
 ARG COMPOSER_REPOSITORY=https://repo.packagist.org
 
 ENV DEBIAN_FRONTEND=noninteractive \
