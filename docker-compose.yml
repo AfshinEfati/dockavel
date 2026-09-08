@@ -17,7 +17,6 @@ x-php-common: &php-common
 x-php-build-args: &php-build-args
   UID: ${UID}
   GID: ${GID}
-  PIE_IMAGE: ${PIE_IMAGE}
   DEBIAN_MIRROR: ${DEBIAN_MIRROR}
   DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR}
   COMPOSER_REPOSITORY: ${COMPOSER_REPOSITORY}
