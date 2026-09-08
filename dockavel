@@ -19,14 +19,18 @@ Usage:
   ./dockavel source:test
   ./dockavel project:add
   ./dockavel project:list
+  ./dockavel project:edit [project]
+  ./dockavel project:remove [project]
   ./dockavel help
 
 Commands:
-  doctor        Diagnose Docker, WSL, selected download sources, ports and stack health.
-  source:test   Test the download endpoints currently configured in .env without changing anything.
-  project:add   Register an existing Laravel or Node.js project and generate its local Nginx config.
-  project:list  List projects registered through Dockavel metadata.
-  help          Show this help.
+  doctor          Diagnose Docker, WSL, selected download sources, ports and stack health.
+  source:test     Test the download endpoints currently configured in .env without changing anything.
+  project:add     Register an existing Laravel or Node.js project and generate its local Nginx config.
+  project:list    List projects registered through Dockavel metadata.
+  project:edit    Edit a registered project's domain/runtime/service metadata and regenerate Nginx.
+  project:remove  Remove Dockavel metadata and Nginx config without deleting the project source files.
+  help            Show this help.
 HELP
 }
 
@@ -341,6 +345,12 @@ main() {
             ;;
         project:list|project-list)
             project_list
+            ;;
+        project:edit|project-edit)
+            project_edit "${2:-}"
+            ;;
+        project:remove|project-remove)
+            project_remove "${2:-}"
             ;;
         help|-h|--help)
             print_help
