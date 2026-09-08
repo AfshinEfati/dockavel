@@ -85,24 +85,6 @@ get_env_value() {
     grep -m1 "^${key}=" "$ENV_FILE" | cut -d= -f2- || true
 }
 
-migrate_legacy_defaults() {
-    local migrated=0
-
-    if grep -qx 'DEBIAN_MIRROR=http://deb.debian.org/debian' "$ENV_FILE"; then
-        set_env_value "DEBIAN_MIRROR" "https://deb.debian.org/debian"
-        migrated=$((migrated + 1))
-    fi
-
-    if grep -qx 'DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security' "$ENV_FILE"; then
-        set_env_value "DEBIAN_SECURITY_MIRROR" "https://deb.debian.org/debian-security"
-        migrated=$((migrated + 1))
-    fi
-
-    if [[ "$migrated" -gt 0 ]]; then
-        echo "Updated $migrated legacy Debian mirror setting(s) from HTTP to HTTPS."
-    fi
-}
-
 add_profile() {
     local profile="$1"
     local existing
@@ -176,7 +158,6 @@ multiselect() {
         done
 
         IFS= read -rsn1 key
-
         case "$key" in
             $'\x1b')
                 rest=""
@@ -280,7 +261,7 @@ prompt_url() {
         value="${value:-$current}"
 
         if [[ "$value" =~ ^https?://[^[:space:]]+$ ]]; then
-            PROMPT_URL_RESULT="$value"
+            PROMPT_RESULT="$value"
             return 0
         fi
 
@@ -288,86 +269,39 @@ prompt_url() {
     done
 }
 
-detect_mirror_preset() {
-    local main_mirror
-    local security_mirror
-    local preset
+prompt_registry_prefix() {
+    local prompt="$1"
+    local current="$2"
+    local allow_empty="${3:-0}"
+    local value
 
-    main_mirror="$(get_env_value DEBIAN_MIRROR)"
-    security_mirror="$(get_env_value DEBIAN_SECURITY_MIRROR)"
+    while true; do
+        read -r -p "$prompt [$current]: " value
+        value="${value:-$current}"
 
-    if [[ "$main_mirror" == "https://deb.debian.org/debian" && "$security_mirror" == "https://deb.debian.org/debian-security" ]]; then
-        preset="official"
-    elif [[ "$main_mirror" == "https://archive.debian.petiak.ir/debian" && "$security_mirror" == "https://deb.debian.org/debian-security" ]]; then
-        preset="iran"
-    elif [[ "$main_mirror" == "https://mirrors.tuna.tsinghua.edu.cn/debian" && "$security_mirror" == "https://mirrors.tuna.tsinghua.edu.cn/debian-security" ]]; then
-        preset="china"
-    else
-        preset="custom"
-    fi
+        if [[ "$value" == "-" && "$allow_empty" -eq 1 ]]; then
+            PROMPT_RESULT=""
+            return 0
+        fi
 
-    set_env_value "DEBIAN_MIRROR_PRESET" "$preset"
-    DEBIAN_MIRROR_PRESET="$preset"
-}
+        if [[ -z "$value" && "$allow_empty" -eq 1 ]]; then
+            PROMPT_RESULT=""
+            return 0
+        fi
 
-select_debian_mirror() {
-    local default_index=0
-    local current_main
-    local current_security
+        if [[ -n "$value" && "$value" != *"://"* && "$value" != *" "* ]]; then
+            [[ "$value" == */ ]] || value="${value}/"
+            PROMPT_RESULT="$value"
+            return 0
+        fi
 
-    case "$DEBIAN_MIRROR_PRESET" in
-        official) default_index=0 ;;
-        iran) default_index=1 ;;
-        china) default_index=2 ;;
-        custom) default_index=3 ;;
-    esac
-
-    choose_one "Debian package mirror" "$default_index" \
-        "Official / Global (deb.debian.org)" \
-        "Iran (Petiak)" \
-        "China (Tsinghua TUNA)" \
-        "Custom URLs"
-
-    case "$CHOICE_INDEX" in
-        0)
-            DEBIAN_MIRROR_PRESET="official"
-            DEBIAN_MIRROR="https://deb.debian.org/debian"
-            DEBIAN_SECURITY_MIRROR="https://deb.debian.org/debian-security"
-            MIRROR_LABEL="Official / Global"
-            ;;
-        1)
-            DEBIAN_MIRROR_PRESET="iran"
-            DEBIAN_MIRROR="https://archive.debian.petiak.ir/debian"
-            # Debian does not list an official Iranian debian-security mirror.
-            # Keep security updates on Debian's HTTPS CDN rather than guessing one.
-            DEBIAN_SECURITY_MIRROR="https://deb.debian.org/debian-security"
-            MIRROR_LABEL="Iran (Petiak + official security)"
-            ;;
-        2)
-            DEBIAN_MIRROR_PRESET="china"
-            DEBIAN_MIRROR="https://mirrors.tuna.tsinghua.edu.cn/debian"
-            DEBIAN_SECURITY_MIRROR="https://mirrors.tuna.tsinghua.edu.cn/debian-security"
-            MIRROR_LABEL="China (Tsinghua TUNA)"
-            ;;
-        3)
-            DEBIAN_MIRROR_PRESET="custom"
-            current_main="$(get_env_value DEBIAN_MIRROR)"
-            current_security="$(get_env_value DEBIAN_SECURITY_MIRROR)"
-            prompt_url "Debian mirror URL" "$current_main"
-            DEBIAN_MIRROR="$PROMPT_URL_RESULT"
-            prompt_url "Debian security mirror URL" "$current_security"
-            DEBIAN_SECURITY_MIRROR="$PROMPT_URL_RESULT"
-            MIRROR_LABEL="Custom"
-            ;;
-    esac
-
-    set_env_value "DEBIAN_MIRROR_PRESET" "$DEBIAN_MIRROR_PRESET"
-    set_env_value "DEBIAN_MIRROR" "$DEBIAN_MIRROR"
-    set_env_value "DEBIAN_SECURITY_MIRROR" "$DEBIAN_SECURITY_MIRROR"
+        echo "Enter a Docker image prefix without http:// or https://."
+        [[ "$allow_empty" -eq 1 ]] && echo "Use - to clear the prefix."
+    done
 }
 
 print_header() {
-    cat <<'EOF'
+    cat <<'HEADER'
 
 ╔══════════════════════════════════════╗
 ║            Dockavel Setup            ║
@@ -375,12 +309,121 @@ print_header() {
 
 Choose only the runtimes and services you actually need.
 Multiple PHP versions can run at the same time.
-EOF
+HEADER
+}
+
+select_download_source() {
+    local preset
+    local default_index=0
+    local current
+
+    preset="$(get_env_value DOWNLOAD_SOURCE_PRESET)"
+    case "$preset" in
+        official) default_index=0 ;;
+        iran) default_index=1 ;;
+        china) default_index=2 ;;
+        custom) default_index=3 ;;
+        *) default_index=0 ;;
+    esac
+
+    choose_one "Download source" "$default_index" \
+        "Official / Global" \
+        "Iran / Runflare" \
+        "China / regional mirrors" \
+        "Custom endpoints"
+
+    case "$CHOICE_INDEX" in
+        0)
+            DOWNLOAD_SOURCE_PRESET="official"
+            SOURCE_LABEL="Official / Global"
+            DOCKER_LIBRARY_PREFIX=""
+            DOCKER_NAMESPACE_PREFIX=""
+            GHCR_PREFIX="ghcr.io/"
+            DEBIAN_MIRROR="https://deb.debian.org/debian"
+            DEBIAN_SECURITY_MIRROR="https://deb.debian.org/debian-security"
+            COMPOSER_REPOSITORY="https://repo.packagist.org"
+            NPM_REGISTRY="https://registry.npmjs.org/"
+            NPM_STRICT_SSL="true"
+            ;;
+        1)
+            DOWNLOAD_SOURCE_PRESET="iran"
+            SOURCE_LABEL="Iran / Runflare"
+            DOCKER_LIBRARY_PREFIX="mirror-docker.runflare.com/library/"
+            DOCKER_NAMESPACE_PREFIX="mirror-docker.runflare.com/"
+            GHCR_PREFIX="mirror-docker.runflare.com/"
+            DEBIAN_MIRROR="http://mirror-linux.runflare.com/debian"
+            DEBIAN_SECURITY_MIRROR="http://mirror-linux.runflare.com/debian-security"
+            COMPOSER_REPOSITORY="https://mirror-composer.runflare.com"
+            NPM_REGISTRY="https://mirror-npm.runflare.com"
+            NPM_STRICT_SSL="false"
+            ;;
+        2)
+            DOWNLOAD_SOURCE_PRESET="china"
+            SOURCE_LABEL="China / regional mirrors"
+            DOCKER_LIBRARY_PREFIX="m.daocloud.io/docker.io/library/"
+            DOCKER_NAMESPACE_PREFIX="m.daocloud.io/docker.io/"
+            GHCR_PREFIX="m.daocloud.io/ghcr.io/"
+            DEBIAN_MIRROR="https://mirrors.tuna.tsinghua.edu.cn/debian"
+            DEBIAN_SECURITY_MIRROR="https://mirrors.tuna.tsinghua.edu.cn/debian-security"
+            COMPOSER_REPOSITORY="https://mirrors.aliyun.com/composer/"
+            NPM_REGISTRY="https://registry.npmmirror.com/"
+            NPM_STRICT_SSL="true"
+            ;;
+        3)
+            DOWNLOAD_SOURCE_PRESET="custom"
+            SOURCE_LABEL="Custom"
+
+            current="$(get_env_value DOCKER_LIBRARY_PREFIX)"
+            prompt_registry_prefix "Docker Hub library prefix (- to clear)" "$current" 1
+            DOCKER_LIBRARY_PREFIX="$PROMPT_RESULT"
+
+            current="$(get_env_value DOCKER_NAMESPACE_PREFIX)"
+            prompt_registry_prefix "Docker Hub namespace prefix (- to clear)" "$current" 1
+            DOCKER_NAMESPACE_PREFIX="$PROMPT_RESULT"
+
+            current="$(get_env_value GHCR_PREFIX)"
+            prompt_registry_prefix "GHCR-compatible prefix" "$current" 0
+            GHCR_PREFIX="$PROMPT_RESULT"
+
+            current="$(get_env_value DEBIAN_MIRROR)"
+            prompt_url "Debian package mirror" "$current"
+            DEBIAN_MIRROR="$PROMPT_RESULT"
+
+            current="$(get_env_value DEBIAN_SECURITY_MIRROR)"
+            prompt_url "Debian security mirror" "$current"
+            DEBIAN_SECURITY_MIRROR="$PROMPT_RESULT"
+
+            current="$(get_env_value COMPOSER_REPOSITORY)"
+            prompt_url "Composer / Packagist repository" "$current"
+            COMPOSER_REPOSITORY="$PROMPT_RESULT"
+
+            current="$(get_env_value NPM_REGISTRY)"
+            prompt_url "npm registry" "$current"
+            NPM_REGISTRY="$PROMPT_RESULT"
+
+            choose_one "npm strict SSL" 0 \
+                "Enabled (recommended)" \
+                "Disabled (only when your mirror requires it)"
+            if [[ "$CHOICE_INDEX" -eq 0 ]]; then
+                NPM_STRICT_SSL="true"
+            else
+                NPM_STRICT_SSL="false"
+            fi
+            ;;
+    esac
+
+    set_env_value "DOWNLOAD_SOURCE_PRESET" "$DOWNLOAD_SOURCE_PRESET"
+    set_env_value "DOCKER_LIBRARY_PREFIX" "$DOCKER_LIBRARY_PREFIX"
+    set_env_value "DOCKER_NAMESPACE_PREFIX" "$DOCKER_NAMESPACE_PREFIX"
+    set_env_value "GHCR_PREFIX" "$GHCR_PREFIX"
+    set_env_value "DEBIAN_MIRROR" "$DEBIAN_MIRROR"
+    set_env_value "DEBIAN_SECURITY_MIRROR" "$DEBIAN_SECURITY_MIRROR"
+    set_env_value "COMPOSER_REPOSITORY" "$COMPOSER_REPOSITORY"
+    set_env_value "NPM_REGISTRY" "$NPM_REGISTRY"
+    set_env_value "NPM_STRICT_SSL" "$NPM_STRICT_SSL"
 }
 
 sync_env_defaults
-migrate_legacy_defaults
-detect_mirror_preset
 print_header
 
 PROFILES=()
@@ -388,8 +431,8 @@ PHP_PROFILES=()
 PHP_LABELS=()
 MULTI_SELECTED=()
 CHOICE_INDEX=0
-PROMPT_URL_RESULT=""
-MIRROR_LABEL=""
+PROMPT_RESULT=""
+SOURCE_LABEL=""
 MYSQL_ENABLED=0
 POSTGRES_ENABLED=0
 REDIS_ENABLED=0
@@ -397,7 +440,7 @@ NODE_ENABLED=0
 PHPMYADMIN_ENABLED=0
 PGADMIN_ENABLED=0
 
-select_debian_mirror
+select_download_source
 
 multiselect "PHP runtimes" 1 "0,3" \
     "PHP 8.2" \
@@ -476,16 +519,20 @@ set_env_value "COMPOSE_PROFILES" "$PROFILES_CSV"
 COMPOSE_PROFILES="$PROFILES_CSV" docker compose config >/dev/null
 
 printf '\nConfiguration\n-------------\n'
-printf 'Debian mirror : %s\n' "$MIRROR_LABEL"
-printf '  Packages    : %s\n' "$DEBIAN_MIRROR"
-printf '  Security    : %s\n' "$DEBIAN_SECURITY_MIRROR"
-printf 'PHP runtimes  : %s\n' "$(IFS=', '; echo "${PHP_LABELS[*]}")"
-printf 'MySQL         : %s\n' "$([[ "$MYSQL_ENABLED" -eq 1 ]] && echo Yes || echo No)"
-printf 'PostgreSQL    : %s\n' "$([[ "$POSTGRES_ENABLED" -eq 1 ]] && echo Yes || echo No)"
-printf 'Redis         : %s\n' "$([[ "$REDIS_ENABLED" -eq 1 ]] && echo Yes || echo No)"
-printf 'Node.js       : %s\n' "$([[ "$NODE_ENABLED" -eq 1 ]] && echo Yes || echo No)"
-printf 'phpMyAdmin    : %s\n' "$([[ "$PHPMYADMIN_ENABLED" -eq 1 ]] && echo Yes || echo No)"
-printf 'pgAdmin       : %s\n' "$([[ "$PGADMIN_ENABLED" -eq 1 ]] && echo Yes || echo No)"
+printf 'Download source : %s\n' "$SOURCE_LABEL"
+printf 'Docker library  : %s\n' "${DOCKER_LIBRARY_PREFIX:-docker.io/library/}"
+printf 'GHCR source     : %s\n' "$GHCR_PREFIX"
+printf 'Debian          : %s\n' "$DEBIAN_MIRROR"
+printf 'Debian security : %s\n' "$DEBIAN_SECURITY_MIRROR"
+printf 'Composer        : %s\n' "$COMPOSER_REPOSITORY"
+printf 'npm             : %s\n' "$NPM_REGISTRY"
+printf 'PHP runtimes    : %s\n' "$(IFS=', '; echo "${PHP_LABELS[*]}")"
+printf 'MySQL           : %s\n' "$([[ "$MYSQL_ENABLED" -eq 1 ]] && echo Yes || echo No)"
+printf 'PostgreSQL      : %s\n' "$([[ "$POSTGRES_ENABLED" -eq 1 ]] && echo Yes || echo No)"
+printf 'Redis           : %s\n' "$([[ "$REDIS_ENABLED" -eq 1 ]] && echo Yes || echo No)"
+printf 'Node.js         : %s\n' "$([[ "$NODE_ENABLED" -eq 1 ]] && echo Yes || echo No)"
+printf 'phpMyAdmin      : %s\n' "$([[ "$PHPMYADMIN_ENABLED" -eq 1 ]] && echo Yes || echo No)"
+printf 'pgAdmin         : %s\n' "$([[ "$PGADMIN_ENABLED" -eq 1 ]] && echo Yes || echo No)"
 printf '\nCOMPOSE_PROFILES=%s\n' "$PROFILES_CSV"
 
 choose_one "Build and start the selected stack now?" 0 \
