@@ -32,31 +32,66 @@ jobs:
       - name: Validate Docker Compose
         run: COMPOSE_PROFILES="${{ matrix.profiles }}" docker compose config
 
-  build-images:
-    name: Build ${{ matrix.service }}
+  build-php:
+    name: Build PHP ${{ matrix.version }}
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - service: php82
-            profile: php82
-          - service: php83
-            profile: php83
-          - service: php84
-            profile: php84
-          - service: php85
-            profile: php85
-          - service: node
-            profile: node
+        version:
+          - "8.2"
+          - "8.3"
+          - "8.4"
+          - "8.5"
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Prepare environment
-        run: cp .env.example .env
+      - name: Build runtime
+        run: |
+          docker build \
+            --pull \
+            --build-arg PHP_VERSION="${{ matrix.version }}" \
+            --tag "dockavel-php:${{ matrix.version }}" \
+            .
 
-      - name: Build ${{ matrix.service }}
-        run: docker compose --profile "${{ matrix.profile }}" build --pull "${{ matrix.service }}"
+      - name: Verify runtime
+        run: |
+          docker run --rm "dockavel-php:${{ matrix.version }}" php -v
+          docker run --rm "dockavel-php:${{ matrix.version }}" php -m | grep -qx redis
+          docker run --rm "dockavel-php:${{ matrix.version }}" php -m | grep -qx pdo_mysql
+          docker run --rm "dockavel-php:${{ matrix.version }}" php -m | grep -qx pdo_pgsql
+          docker run --rm "dockavel-php:${{ matrix.version }}" composer --version
+
+  build-node:
+    name: Build Node 24
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build runtime
+        run: docker build --pull -f Dockerfile-node -t dockavel-node:24 .
+
+      - name: Verify runtime
+        run: |
+          docker run --rm --entrypoint node dockavel-node:24 --version
+          docker run --rm --entrypoint npm dockavel-node:24 --version
+          docker run --rm --entrypoint supervisord dockavel-node:24 --version
+
+  shell-validation:
+    name: Validate shell scripts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Bash syntax
+        run: bash -n setup.sh
+
+      - name: POSIX shell syntax
+        run: sh -n docker/php/entrypoint.sh
