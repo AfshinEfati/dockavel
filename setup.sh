@@ -80,6 +80,11 @@ set_env_value() {
     mv "$tmp" "$ENV_FILE"
 }
 
+get_env_value() {
+    local key="$1"
+    grep -m1 "^${key}=" "$ENV_FILE" | cut -d= -f2- || true
+}
+
 migrate_legacy_defaults() {
     local migrated=0
 
@@ -265,6 +270,102 @@ choose_one() {
     done
 }
 
+prompt_url() {
+    local prompt="$1"
+    local current="$2"
+    local value
+
+    while true; do
+        read -r -p "$prompt [$current]: " value
+        value="${value:-$current}"
+
+        if [[ "$value" =~ ^https?://[^[:space:]]+$ ]]; then
+            PROMPT_URL_RESULT="$value"
+            return 0
+        fi
+
+        echo "Enter a valid http:// or https:// URL."
+    done
+}
+
+detect_mirror_preset() {
+    local main_mirror
+    local security_mirror
+    local preset
+
+    main_mirror="$(get_env_value DEBIAN_MIRROR)"
+    security_mirror="$(get_env_value DEBIAN_SECURITY_MIRROR)"
+
+    if [[ "$main_mirror" == "https://deb.debian.org/debian" && "$security_mirror" == "https://deb.debian.org/debian-security" ]]; then
+        preset="official"
+    elif [[ "$main_mirror" == "https://archive.debian.petiak.ir/debian" && "$security_mirror" == "https://deb.debian.org/debian-security" ]]; then
+        preset="iran"
+    elif [[ "$main_mirror" == "https://mirrors.tuna.tsinghua.edu.cn/debian" && "$security_mirror" == "https://mirrors.tuna.tsinghua.edu.cn/debian-security" ]]; then
+        preset="china"
+    else
+        preset="custom"
+    fi
+
+    set_env_value "DEBIAN_MIRROR_PRESET" "$preset"
+    DEBIAN_MIRROR_PRESET="$preset"
+}
+
+select_debian_mirror() {
+    local default_index=0
+    local current_main
+    local current_security
+
+    case "$DEBIAN_MIRROR_PRESET" in
+        official) default_index=0 ;;
+        iran) default_index=1 ;;
+        china) default_index=2 ;;
+        custom) default_index=3 ;;
+    esac
+
+    choose_one "Debian package mirror" "$default_index" \
+        "Official / Global (deb.debian.org)" \
+        "Iran (Petiak)" \
+        "China (Tsinghua TUNA)" \
+        "Custom URLs"
+
+    case "$CHOICE_INDEX" in
+        0)
+            DEBIAN_MIRROR_PRESET="official"
+            DEBIAN_MIRROR="https://deb.debian.org/debian"
+            DEBIAN_SECURITY_MIRROR="https://deb.debian.org/debian-security"
+            MIRROR_LABEL="Official / Global"
+            ;;
+        1)
+            DEBIAN_MIRROR_PRESET="iran"
+            DEBIAN_MIRROR="https://archive.debian.petiak.ir/debian"
+            # Debian does not list an official Iranian debian-security mirror.
+            # Keep security updates on Debian's HTTPS CDN rather than guessing one.
+            DEBIAN_SECURITY_MIRROR="https://deb.debian.org/debian-security"
+            MIRROR_LABEL="Iran (Petiak + official security)"
+            ;;
+        2)
+            DEBIAN_MIRROR_PRESET="china"
+            DEBIAN_MIRROR="https://mirrors.tuna.tsinghua.edu.cn/debian"
+            DEBIAN_SECURITY_MIRROR="https://mirrors.tuna.tsinghua.edu.cn/debian-security"
+            MIRROR_LABEL="China (Tsinghua TUNA)"
+            ;;
+        3)
+            DEBIAN_MIRROR_PRESET="custom"
+            current_main="$(get_env_value DEBIAN_MIRROR)"
+            current_security="$(get_env_value DEBIAN_SECURITY_MIRROR)"
+            prompt_url "Debian mirror URL" "$current_main"
+            DEBIAN_MIRROR="$PROMPT_URL_RESULT"
+            prompt_url "Debian security mirror URL" "$current_security"
+            DEBIAN_SECURITY_MIRROR="$PROMPT_URL_RESULT"
+            MIRROR_LABEL="Custom"
+            ;;
+    esac
+
+    set_env_value "DEBIAN_MIRROR_PRESET" "$DEBIAN_MIRROR_PRESET"
+    set_env_value "DEBIAN_MIRROR" "$DEBIAN_MIRROR"
+    set_env_value "DEBIAN_SECURITY_MIRROR" "$DEBIAN_SECURITY_MIRROR"
+}
+
 print_header() {
     cat <<'EOF'
 
@@ -279,6 +380,7 @@ EOF
 
 sync_env_defaults
 migrate_legacy_defaults
+detect_mirror_preset
 print_header
 
 PROFILES=()
@@ -286,12 +388,16 @@ PHP_PROFILES=()
 PHP_LABELS=()
 MULTI_SELECTED=()
 CHOICE_INDEX=0
+PROMPT_URL_RESULT=""
+MIRROR_LABEL=""
 MYSQL_ENABLED=0
 POSTGRES_ENABLED=0
 REDIS_ENABLED=0
 NODE_ENABLED=0
 PHPMYADMIN_ENABLED=0
 PGADMIN_ENABLED=0
+
+select_debian_mirror
 
 multiselect "PHP runtimes" 1 "0,3" \
     "PHP 8.2" \
@@ -370,13 +476,16 @@ set_env_value "COMPOSE_PROFILES" "$PROFILES_CSV"
 COMPOSE_PROFILES="$PROFILES_CSV" docker compose config >/dev/null
 
 printf '\nConfiguration\n-------------\n'
-printf 'PHP runtimes : %s\n' "$(IFS=', '; echo "${PHP_LABELS[*]}")"
-printf 'MySQL        : %s\n' "$([[ "$MYSQL_ENABLED" -eq 1 ]] && echo Yes || echo No)"
-printf 'PostgreSQL   : %s\n' "$([[ "$POSTGRES_ENABLED" -eq 1 ]] && echo Yes || echo No)"
-printf 'Redis        : %s\n' "$([[ "$REDIS_ENABLED" -eq 1 ]] && echo Yes || echo No)"
-printf 'Node.js      : %s\n' "$([[ "$NODE_ENABLED" -eq 1 ]] && echo Yes || echo No)"
-printf 'phpMyAdmin   : %s\n' "$([[ "$PHPMYADMIN_ENABLED" -eq 1 ]] && echo Yes || echo No)"
-printf 'pgAdmin      : %s\n' "$([[ "$PGADMIN_ENABLED" -eq 1 ]] && echo Yes || echo No)"
+printf 'Debian mirror : %s\n' "$MIRROR_LABEL"
+printf '  Packages    : %s\n' "$DEBIAN_MIRROR"
+printf '  Security    : %s\n' "$DEBIAN_SECURITY_MIRROR"
+printf 'PHP runtimes  : %s\n' "$(IFS=', '; echo "${PHP_LABELS[*]}")"
+printf 'MySQL         : %s\n' "$([[ "$MYSQL_ENABLED" -eq 1 ]] && echo Yes || echo No)"
+printf 'PostgreSQL    : %s\n' "$([[ "$POSTGRES_ENABLED" -eq 1 ]] && echo Yes || echo No)"
+printf 'Redis         : %s\n' "$([[ "$REDIS_ENABLED" -eq 1 ]] && echo Yes || echo No)"
+printf 'Node.js       : %s\n' "$([[ "$NODE_ENABLED" -eq 1 ]] && echo Yes || echo No)"
+printf 'phpMyAdmin    : %s\n' "$([[ "$PHPMYADMIN_ENABLED" -eq 1 ]] && echo Yes || echo No)"
+printf 'pgAdmin       : %s\n' "$([[ "$PGADMIN_ENABLED" -eq 1 ]] && echo Yes || echo No)"
 printf '\nCOMPOSE_PROFILES=%s\n' "$PROFILES_CSV"
 
 choose_one "Build and start the selected stack now?" 0 \
