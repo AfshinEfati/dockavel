@@ -1,15 +1,12 @@
-ARG DOCKER_LIBRARY_PREFIX=
+ARG DOCKER_LIBRARY_PREFIX=docker.io/library/
 FROM ${DOCKER_LIBRARY_PREFIX}node:24-bookworm-slim
 
-# Use HTTP for the initial apt bootstrap. Slim base images may not contain a
-# usable CA bundle yet; apt still verifies Debian repository signatures.
-ARG DEBIAN_MIRROR=http://deb.debian.org/debian
-ARG DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security
+ARG DEBIAN_MIRROR=https://deb.debian.org/debian
+ARG DEBIAN_SECURITY_MIRROR=https://deb.debian.org/debian-security
 ARG NPM_REGISTRY=https://registry.npmjs.org/
 ARG NPM_STRICT_SSL=true
 
-ENV DEBIAN_FRONTEND=noninteractive \
-    NPM_CONFIG_REGISTRY=${NPM_REGISTRY} \
+ENV NPM_CONFIG_REGISTRY=${NPM_REGISTRY} \
     npm_config_registry=${NPM_REGISTRY} \
     NPM_CONFIG_STRICT_SSL=${NPM_STRICT_SSL} \
     NPM_CONFIG_FETCH_RETRIES=20 \
@@ -29,8 +26,6 @@ RUN set -eux; \
             -e "s|https://deb.debian.org/debian|${DEBIAN_MIRROR}|g" \
             -e "s|http://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
             -e "s|https://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
-            -e "s|http://security.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
-            -e "s|https://security.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
             /etc/apt/sources.list; \
     fi; \
     if [ -d /etc/apt/sources.list.d ]; then \
@@ -41,39 +36,8 @@ RUN set -eux; \
                 -e "s|https://deb.debian.org/debian|${DEBIAN_MIRROR}|g" \
                 -e "s|http://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
                 -e "s|https://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
-                -e "s|http://security.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
-                -e "s|https://security.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
                 {} +; \
-    fi
-
-RUN set -eux; \
-    apt-get \
-        -o Acquire::Retries=5 \
-        -o Acquire::http::Timeout=60 \
-        -o Acquire::https::Timeout=60 \
-        update; \
-    apt-get \
-        -o Acquire::Retries=5 \
-        -o Acquire::http::Timeout=60 \
-        -o Acquire::https::Timeout=60 \
-        install -y --no-install-recommends \
-        bash \
-        ca-certificates \
-        curl \
-        g++ \
-        git \
-        make \
-        openssh-client \
-        python3 \
-        supervisor; \
-    update-ca-certificates; \
-    apt-get clean; \
-    rm -rf \
-        /var/lib/apt/lists/* \
-        /tmp/* \
-        /var/tmp/*
-
-RUN set -eux; \
+    fi; \
     printf 'registry=%s\n' "${NPM_REGISTRY}" > /usr/local/etc/npmrc; \
     printf 'strict-ssl=%s\n' "${NPM_STRICT_SSL}" >> /usr/local/etc/npmrc; \
     printf 'fetch-retries=20\n' >> /usr/local/etc/npmrc; \
@@ -84,17 +48,8 @@ RUN set -eux; \
     printf 'maxsockets=2\n' >> /usr/local/etc/npmrc; \
     printf 'audit=false\n' >> /usr/local/etc/npmrc; \
     printf 'fund=false\n' >> /usr/local/etc/npmrc; \
-    printf 'progress=false\n' >> /usr/local/etc/npmrc; \
-    node --version; \
-    npm --version
-
-RUN mkdir -p \
-    /var/www \
-    /var/www/.npm-cache \
-    /var/www/.yarn-cache \
-    /var/www/.cache \
-    /var/www/.cache/corepack
+    printf 'progress=false\n' >> /usr/local/etc/npmrc
 
 WORKDIR /var/www
 
-CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/supervisord.conf"]
+CMD ["sleep", "infinity"]
