@@ -1,7 +1,4 @@
-ARG PIE_IMAGE=ghcr.io/php/pie:bin
 ARG PHP_VERSION=8.5
-
-FROM ${PIE_IMAGE} AS pie
 
 FROM php:${PHP_VERSION}-fpm
 
@@ -85,18 +82,15 @@ RUN set -eux; \
         pdo_mysql \
         pdo_pgsql \
         zip; \
+    printf '\n\n\n\n\n\n' | pecl install redis; \
+    docker-php-ext-enable redis; \
+    php -m | grep -qx redis; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-COPY --from=pie /pie /usr/local/bin/pie
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 RUN set -eux; \
-    chmod +x /usr/local/bin/pie; \
-    pie repository:remove packagist.org || true; \
-    pie repository:add composer "${COMPOSER_REPOSITORY}"; \
-    pie install --no-cache "phpredis/phpredis:^6.3"; \
-    php -m | grep -qx redis; \
     if ! getent group "${GID}" >/dev/null 2>&1; then \
         groupadd --gid "${GID}" app; \
     fi; \
