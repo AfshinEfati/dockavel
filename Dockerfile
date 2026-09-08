@@ -6,15 +6,13 @@ FROM ${GHCR_PREFIX}php/pie:bin AS pie
 FROM ${DOCKER_LIBRARY_PREFIX}composer:2 AS composer
 FROM ${DOCKER_LIBRARY_PREFIX}php:${PHP_VERSION}-fpm
 
-ARG UID=1000
-ARG GID=1000
 ARG DEBIAN_MIRROR=https://deb.debian.org/debian
 ARG DEBIAN_SECURITY_MIRROR=https://deb.debian.org/debian-security
 ARG COMPOSER_REPOSITORY=https://repo.packagist.org
 
 ENV DEBIAN_FRONTEND=noninteractive \
     COMPOSER_ALLOW_SUPERUSER=1 \
-    COMPOSER_HOME=/opt/composer \
+    COMPOSER_HOME=/var/www/.composer \
     COMPOSER_CACHE_DIR=/var/www/.composer-cache \
     COMPOSER_PROCESS_TIMEOUT=600 \
     HOME=/var/www \
@@ -102,50 +100,17 @@ RUN set -eux; \
 COPY --from=pie /pie /usr/local/bin/pie
 COPY --from=composer /usr/bin/composer /usr/bin/composer
 
-# Install Redis through PIE so both the PIE image and package repository can be
-# redirected by the selected download source profile.
 RUN set -eux; \
     chmod +x /usr/local/bin/pie; \
     pie repository:remove packagist.org || true; \
     pie repository:add composer "${COMPOSER_REPOSITORY}"; \
-    installed=0; \
-    attempt=1; \
-    while [ "$attempt" -le 5 ]; do \
-        if pie install --no-cache "phpredis/phpredis:^6.3"; then \
-            installed=1; \
-            break; \
-        fi; \
-        echo "PIE Redis install failed (attempt ${attempt}/5). Retrying in 10 seconds..."; \
-        attempt=$((attempt + 1)); \
-        sleep 10; \
-    done; \
-    [ "$installed" -eq 1 ]; \
-    php -m | grep -qx redis
-
-RUN set -eux; \
-    if ! getent group "${GID}" >/dev/null 2>&1; then \
-        groupadd --gid "${GID}" app; \
-    fi; \
-    if ! getent passwd "${UID}" >/dev/null 2>&1; then \
-        useradd \
-            --uid "${UID}" \
-            --gid "${GID}" \
-            --home-dir /var/www \
-            --shell /bin/bash \
-            app; \
-    fi; \
-    mkdir -p \
-        /opt/composer \
-        /var/www/.composer-cache \
-        /var/www/.config/psysh \
-        /var/www/.local/share \
-        /var/www/.psysh; \
-    composer config --global repos.packagist composer "${COMPOSER_REPOSITORY}"; \
-    chown -R "${UID}:${GID}" \
-        /opt/composer \
-        /var/www/.composer-cache \
-        /var/www/.config \
-        /var/www/.local \
-        /var/www/.psysh; \
+    pie install --no-cache "phpredis/phpredis:^6.3"; \
+    php -m | grep -qx redis; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+COPY docker/php/entrypoint.sh /usr/local/bin/dockavel-php-entrypoint
+RUN chmod +x /usr/local/bin/dockavel-php-entrypoint
+
+ENTRYPOINT ["dockavel-php-entrypoint"]
+CMD ["php-fpm"]
