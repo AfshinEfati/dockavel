@@ -1,8 +1,6 @@
 ARG DOCKER_LIBRARY_PREFIX=
 FROM ${DOCKER_LIBRARY_PREFIX}node:24-bookworm-slim
 
-ARG UID=1000
-ARG GID=1000
 ARG DEBIAN_MIRROR=https://deb.debian.org/debian
 ARG DEBIAN_SECURITY_MIRROR=https://deb.debian.org/debian-security
 ARG NPM_REGISTRY=https://registry.npmjs.org/
@@ -86,27 +84,14 @@ RUN set -eux; \
     printf 'fund=false\n' >> /usr/local/etc/npmrc; \
     printf 'progress=false\n' >> /usr/local/etc/npmrc; \
     node --version; \
-    npm --version; \
-    npm config get registry
+    npm --version
 
-RUN set -eux; \
-    if [ "$(id -g node)" != "${GID}" ]; then \
-        groupmod --non-unique --gid "${GID}" node; \
-    fi; \
-    if [ "$(id -u node)" != "${UID}" ]; then \
-        usermod --non-unique --uid "${UID}" node; \
-    fi; \
-    mkdir -p \
-        /var/www \
-        /var/www/.npm-cache \
-        /var/www/.yarn-cache \
-        /var/www/.cache \
-        /var/www/.cache/corepack \
-        /home/node/.cache \
-        /home/node/.npm; \
-    chown -R node:node \
-        /var/www \
-        /home/node
+RUN mkdir -p \
+    /var/www \
+    /var/www/.npm-cache \
+    /var/www/.yarn-cache \
+    /var/www/.cache \
+    /var/www/.cache/corepack
 
 WORKDIR /var/www
 
