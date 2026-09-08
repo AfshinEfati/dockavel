@@ -145,10 +145,12 @@ multiselect() {
                 for ((i = 0; i < ${#items[@]}; i++)); do
                     [[ "${checked[i]}" -eq 1 ]] && selected_count=$((selected_count + 1))
                 done
+
                 if (( selected_count < minimum )); then
                     printf '\a'
                     continue
                 fi
+
                 MULTI_SELECTED=()
                 for ((i = 0; i < ${#items[@]}; i++)); do
                     [[ "${checked[i]}" -eq 1 ]] && MULTI_SELECTED+=("$i")
@@ -210,32 +212,26 @@ choose_one() {
 
 prompt_url() {
     local prompt="$1" current="$2" value
+
     while true; do
         read -r -p "$prompt [$current]: " value
         value="${value:-$current}"
+
         if [[ "$value" =~ ^https?://[^[:space:]]+$ ]]; then
             PROMPT_RESULT="$value"
             return 0
         fi
+
         echo "Enter a valid http:// or https:// URL."
     done
 }
 
 prompt_registry_prefix() {
-    local prompt="$1" current="$2" allow_empty="${3:-0}" value
+    local prompt="$1" current="$2" value
+
     while true; do
         read -r -p "$prompt [$current]: " value
         value="${value:-$current}"
-
-        if [[ "$value" == "-" && "$allow_empty" -eq 1 ]]; then
-            PROMPT_RESULT=""
-            return 0
-        fi
-
-        if [[ -z "$value" && "$allow_empty" -eq 1 ]]; then
-            PROMPT_RESULT=""
-            return 0
-        fi
 
         if [[ -n "$value" && "$value" != *"://"* && "$value" != *" "* ]]; then
             [[ "$value" == */ ]] || value="${value}/"
@@ -244,7 +240,6 @@ prompt_registry_prefix() {
         fi
 
         echo "Enter an image prefix without http:// or https://."
-        [[ "$allow_empty" -eq 1 ]] && echo "Use - to clear the prefix."
     done
 }
 
@@ -256,7 +251,8 @@ print_header() {
 ╚══════════════════════════════════════╝
 
 Choose only the runtimes and services you actually need.
-Each regional preset keeps runtime images and package downloads on that preset's configured route.
+A selected regional source is used consistently for Docker images and package repositories.
+Dockavel does not require any private or Dockavel-specific registry images.
 HEADER
 }
 
@@ -284,7 +280,6 @@ select_download_source() {
         0)
             DOWNLOAD_SOURCE_PRESET="official"
             SOURCE_LABEL="Official / Global"
-            DOCKAVEL_RUNTIME_PREFIX="docker.io/afshinefati/"
             DOCKER_LIBRARY_PREFIX="docker.io/library/"
             DOCKER_NAMESPACE_PREFIX="docker.io/"
             DEBIAN_MIRROR="https://deb.debian.org/debian"
@@ -296,7 +291,6 @@ select_download_source() {
         1)
             DOWNLOAD_SOURCE_PRESET="iranserver"
             SOURCE_LABEL="Iran / IranServer"
-            DOCKAVEL_RUNTIME_PREFIX="docker.iranserver.com/afshinefati/"
             DOCKER_LIBRARY_PREFIX="docker.iranserver.com/library/"
             DOCKER_NAMESPACE_PREFIX="docker.iranserver.com/"
             DEBIAN_MIRROR="https://mirror.iranserver.com/debian"
@@ -308,7 +302,6 @@ select_download_source() {
         2)
             DOWNLOAD_SOURCE_PRESET="runflare"
             SOURCE_LABEL="Iran / Runflare"
-            DOCKAVEL_RUNTIME_PREFIX="mirror-docker.runflare.com/afshinefati/"
             DOCKER_LIBRARY_PREFIX="mirror-docker.runflare.com/library/"
             DOCKER_NAMESPACE_PREFIX="mirror-docker.runflare.com/"
             DEBIAN_MIRROR="http://mirror-linux.runflare.com/debian"
@@ -320,7 +313,6 @@ select_download_source() {
         3)
             DOWNLOAD_SOURCE_PRESET="china"
             SOURCE_LABEL="China / regional mirrors"
-            DOCKAVEL_RUNTIME_PREFIX="m.daocloud.io/docker.io/afshinefati/"
             DOCKER_LIBRARY_PREFIX="m.daocloud.io/docker.io/library/"
             DOCKER_NAMESPACE_PREFIX="m.daocloud.io/docker.io/"
             DEBIAN_MIRROR="https://mirrors.tuna.tsinghua.edu.cn/debian"
@@ -333,16 +325,12 @@ select_download_source() {
             DOWNLOAD_SOURCE_PRESET="custom"
             SOURCE_LABEL="Custom"
 
-            current="$(get_env_value DOCKAVEL_RUNTIME_PREFIX)"
-            prompt_registry_prefix "Dockavel runtime image prefix" "$current" 0
-            DOCKAVEL_RUNTIME_PREFIX="$PROMPT_RESULT"
-
             current="$(get_env_value DOCKER_LIBRARY_PREFIX)"
-            prompt_registry_prefix "Docker library image prefix" "$current" 0
+            prompt_registry_prefix "Docker library image prefix" "$current"
             DOCKER_LIBRARY_PREFIX="$PROMPT_RESULT"
 
             current="$(get_env_value DOCKER_NAMESPACE_PREFIX)"
-            prompt_registry_prefix "Docker namespace image prefix" "$current" 0
+            prompt_registry_prefix "Docker namespace image prefix" "$current"
             DOCKER_NAMESPACE_PREFIX="$PROMPT_RESULT"
 
             current="$(get_env_value DEBIAN_MIRROR)"
@@ -369,7 +357,6 @@ select_download_source() {
     esac
 
     set_env_value "DOWNLOAD_SOURCE_PRESET" "$DOWNLOAD_SOURCE_PRESET"
-    set_env_value "DOCKAVEL_RUNTIME_PREFIX" "$DOCKAVEL_RUNTIME_PREFIX"
     set_env_value "DOCKER_LIBRARY_PREFIX" "$DOCKER_LIBRARY_PREFIX"
     set_env_value "DOCKER_NAMESPACE_PREFIX" "$DOCKER_NAMESPACE_PREFIX"
     set_env_value "DEBIAN_MIRROR" "$DEBIAN_MIRROR"
@@ -468,9 +455,10 @@ COMPOSE_PROFILES="$PROFILES_CSV" docker compose config >/dev/null
 
 printf '\nConfiguration\n-------------\n'
 printf 'Download source : %s\n' "$SOURCE_LABEL"
-printf 'Dockavel images : %s\n' "$DOCKAVEL_RUNTIME_PREFIX"
 printf 'Docker library  : %s\n' "$DOCKER_LIBRARY_PREFIX"
 printf 'Docker namespace: %s\n' "$DOCKER_NAMESPACE_PREFIX"
+printf 'PHP base image  : %sserversideup/php:<version>-fpm\n' "$DOCKER_NAMESPACE_PREFIX"
+printf 'Node base image : %snode:24-bookworm-slim\n' "$DOCKER_LIBRARY_PREFIX"
 printf 'Debian          : %s\n' "$DEBIAN_MIRROR"
 printf 'Debian security : %s\n' "$DEBIAN_SECURITY_MIRROR"
 printf 'Composer        : %s\n' "$COMPOSER_REPOSITORY"
@@ -488,16 +476,16 @@ if [[ "$DOWNLOAD_SOURCE_PRESET" == "runflare" ]]; then
     printf '\nNote: Runflare may enforce a request quota on its free mirror service.\n'
 fi
 
-choose_one "Pull and start the selected stack now?" 0 \
-    "Yes, pull and start" \
+choose_one "Build and start the selected stack now?" 0 \
+    "Yes, build and start" \
     "No, save configuration only"
 
 if [[ "$CHOICE_INDEX" -eq 0 ]]; then
-    docker compose pull
-    docker compose up -d
+    docker compose pull --ignore-buildable
+    docker compose up -d --build
     echo
     docker compose ps
 else
     echo "Configuration saved to $ENV_FILE."
-    echo "Start later with: docker compose pull && docker compose up -d"
+    echo "Start later with: docker compose pull --ignore-buildable && docker compose up -d --build"
 fi
