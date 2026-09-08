@@ -1,6 +1,6 @@
 server {
     listen 80;
-    server_name {{DOMAIN}}.local;
+    server_name {{DOMAIN}};
 
     root /var/www/{{PROJECT_NAME}}/public;
     index index.php index.html;

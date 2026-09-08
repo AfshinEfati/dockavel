@@ -17,12 +17,20 @@ Dockavel
 Usage:
   ./dockavel doctor
   ./dockavel source:test
+  ./dockavel project:add
+  ./dockavel project:list
+  ./dockavel project:edit [project]
+  ./dockavel project:remove [project]
   ./dockavel help
 
 Commands:
-  doctor       Diagnose Docker, WSL, selected download sources, ports and stack health.
-  source:test  Test the download endpoints currently configured in .env without changing anything.
-  help         Show this help.
+  doctor          Diagnose Docker, WSL, selected download sources, ports and stack health.
+  source:test     Test the download endpoints currently configured in .env without changing anything.
+  project:add     Register an existing Laravel or Node.js project and generate its local Nginx config.
+  project:list    List projects registered through Dockavel metadata.
+  project:edit    Edit a registered project's domain/runtime/service metadata and regenerate Nginx.
+  project:remove  Remove Dockavel metadata and Nginx config without deleting the project source files.
+  help            Show this help.
 HELP
 }
 
@@ -319,6 +327,10 @@ doctor() {
     printf '%s If a source reports "IPv4 works", the default/IPv6 route is likely broken while IPv4 is usable.\n' "$INFO"
 }
 
+# Project management is kept in a separate shell module so the main CLI stays small.
+# shellcheck source=lib/project-manager.sh
+source "$ROOT_DIR/lib/project-manager.sh"
+
 main() {
     local command="${1:-help}"
     case "$command" in
@@ -327,6 +339,18 @@ main() {
             ;;
         source:test|source-test)
             source_test
+            ;;
+        project:add|project-add)
+            project_add
+            ;;
+        project:list|project-list)
+            project_list
+            ;;
+        project:edit|project-edit)
+            project_edit "${2:-}"
+            ;;
+        project:remove|project-remove)
+            project_remove "${2:-}"
             ;;
         help|-h|--help)
             print_help

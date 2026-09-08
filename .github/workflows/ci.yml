@@ -109,4 +109,10 @@ jobs:
         run: |
           bash -n setup.sh
           bash -n dockavel
+          bash -n lib/project-manager.sh
           test -x dockavel
+
+      - name: CLI smoke test
+        run: |
+          ./dockavel help >/dev/null
+          ./dockavel project:list >/dev/null

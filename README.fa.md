@@ -4,13 +4,13 @@
 
 [English](README.md) | **فارسی**
 
-Dockavel یک محیط توسعه محلی قابل تنظیم برای اجرای هم‌زمان چند پروژه **Laravel و Node.js** است که بر پایه Docker Compose و Nginx ساخته شده است.
+Dockavel یک محیط توسعه محلی سبک و قابل تنظیم برای اجرای هم‌زمان چند پروژه **Laravel و Node.js** روی یک Docker Compose stack مشترک است.
 
-هدف Dockavel این است که اگر چند پروژه با نسخه‌های متفاوت PHP، دیتابیس‌های مختلف، Redis، Node.js یا دامنه‌های محلی متفاوت دارید، مجبور نباشید برای هر پروژه یک استک جدا و تکراری بسازید. می‌توانید فقط سرویس‌هایی را که لازم دارید فعال کنید، چند نسخه PHP را هم‌زمان اجرا کنید و برای شرایط شبکه‌ای مختلف از mirrorهای منطقه‌ای استفاده کنید.
+هدف این است که چند پروژه با نسخه‌های متفاوت PHP، دیتابیس‌های مختلف، دامنه‌های محلی جدا و شرایط شبکه‌ای متفاوت را بدون ساختن یک استک تکراری برای هر پروژه مدیریت کنید. Dockavel عمداً Core کوچکی دارد: فقط سرویس‌های موردنیاز را فعال می‌کنید، پروژه‌ها را با CLI ساده مدیریت می‌کنید و تنظیمات اضافه‌ای که استفاده روزمره را پیچیده کند وارد هسته نمی‌شود.
 
 ## چرا Dockavel؟
 
-وقتی فقط یک پروژه دارید، یک فایل ساده Docker Compose معمولاً کافی است. اما با افزایش تعداد پروژه‌ها مشکلاتی مثل این‌ها ایجاد می‌شود:
+یک فایل Compose ساده برای یک پروژه معمولاً کافی است، اما وقتی چند پروژه دارید مشکلاتی مثل این‌ها ایجاد می‌شود:
 
 - یک پروژه PHP 8.2 می‌خواهد و پروژه دیگر PHP 8.5
 - بعضی پروژه‌ها MySQL و بعضی PostgreSQL می‌خواهند
@@ -20,25 +20,37 @@ Dockavel یک محیط توسعه محلی قابل تنظیم برای اجرا
 
 Dockavel این زیرساخت را در یک محیط مشترک مدیریت می‌کند.
 
+## اصول طراحی
+
+Dockavel عمداً قرار نیست به یک استک شلوغ و همه‌کاره تبدیل شود.
+
+یک قابلیت جدید وقتی وارد Core می‌شود که حداقل یکی از این کارها را انجام دهد:
+
+1. راه‌اندازی پروژه را سریع‌تر کند،
+2. مدیریت چند پروژه را ساده‌تر کند،
+3. خطاها و زمان debug محیط توسعه را کمتر کند.
+
+هدف، automation مفید با کمترین پیچیدگی ممکن است.
+
 ## امکانات
 
 - اجرای هم‌زمان PHP-FPM نسخه‌های **8.2، 8.3، 8.4 و 8.5**
-- MySQL 8 به‌صورت اختیاری
-- PostgreSQL 17 به‌صورت اختیاری
+- MySQL 8 و PostgreSQL 17 به‌صورت اختیاری
 - Redis 7 به‌صورت اختیاری
 - Node.js 24 به‌صورت اختیاری
 - phpMyAdmin و pgAdmin به‌صورت اختیاری
-- استفاده از Docker Compose Profiles برای فعال کردن فقط سرویس‌های موردنیاز
-- نصب‌کننده تعاملی `setup.sh`
-- انتخاب منبع دانلود برای Docker imageها و package repositoryها
-- presetهای Official، IranServer، Runflare، China و Custom
-- مسیریابی پروژه‌ها با Nginx به runtime مناسب
-- پوشه مشترک `projects/` برای همه runtimeها
-- پشتیبانی PHP از MySQL، PostgreSQL، Redis، Composer و نیازهای رایج Laravel
-- هماهنگی UID/GID برای کاهش مشکل فایل‌های root-owned
-- امکان اضافه کردن سرویس‌های جدید با اجرای دوباره setup
-- تست خودکار Compose و runtimeها در GitHub Actions
-- عدم وابستگی به image خصوصی یا image اختصاصی Dockavel در registryها
+- Docker Compose Profiles برای فعال کردن فقط سرویس‌های لازم
+- نصب‌کننده تعاملی `./setup.sh`
+- presetهای دانلود برای Docker imageها و package repositoryها
+- Official/Global، IranServer، Runflare، China و Custom
+- عدم fallback مخفی بین registryها در presetهای منطقه‌ای
+- مسیریابی Nginx برای هر پروژه و runtime
+- پوشه مشترک `projects/` برای runtimeها
+- Project Manager برای add/list/edit/remove
+- ابزار عیب‌یابی read-only با `./dockavel doctor`
+- تست read-only منبع دانلود با `./dockavel source:test`
+- تست خودکار Compose، runtimeها و shell scriptها در GitHub Actions
+- عدم وابستگی به image خصوصی یا registry اختصاصی Dockavel
 
 ## معماری
 
@@ -66,13 +78,11 @@ Database tools
    └── pgAdmin       (اختیاری)
 ```
 
-تمام پروژه‌ها از طریق volume مشترک زیر در دسترس runtimeها هستند:
+تمام runtimeهای پروژه پوشه زیر را mount می‌کنند:
 
 ```text
 ./projects → /var/www
 ```
-
-بنابراین چند پروژه مختلف می‌توانند هم‌زمان روی نسخه‌های متفاوت PHP اجرا شوند.
 
 ## سرویس‌ها و Profileها
 
@@ -86,37 +96,37 @@ Database tools
 | PostgreSQL | 17 Alpine | `postgres` |
 | Redis | 7 Alpine | `redis` |
 | Node.js | 24 Bookworm Slim | `node` |
-| phpMyAdmin | image رسمی upstream | `mysql-ui` |
+| phpMyAdmin | image upstream | `mysql-ui` |
 | pgAdmin | 9 | `postgres-ui` |
 | Nginx | Alpine | همیشه فعال |
 
-PHPها به‌صورت محلی از image عمومی زیر build می‌شوند:
+PHPها به‌صورت local از image عمومی زیر build می‌شوند:
 
 ```text
 serversideup/php:<version>-fpm
 ```
 
-Node.js نیز از image عمومی زیر build می‌شود:
+Node.js نیز از این image عمومی build می‌شود:
 
 ```text
 node:24-bookworm-slim
 ```
 
-آدرس واقعی این imageها بر اساس mirror انتخاب‌شده تغییر می‌کند.
+مسیر واقعی image بر اساس mirror انتخاب‌شده تغییر می‌کند.
 
 برای اجرای Dockavel نیازی به Docker Hub account، GHCR account یا registry خصوصی Dockavel ندارید.
 
 ## پیش‌نیازها
 
 - Docker Engine یا Docker Desktop
-- Docker Compose v2
+- Docker Compose v2 (`docker compose`)
 - Bash
 - ترمینال interactive
 - آزاد بودن پورت `80` برای Nginx
 
 در Windows استفاده از **WSL2** پیشنهاد می‌شود.
 
-برای بررسی Docker:
+بررسی Docker:
 
 ```bash
 docker --version
@@ -128,25 +138,25 @@ docker compose version
 ```bash
 git clone https://github.com/AfshinEfati/dockavel.git
 cd dockavel
-chmod +x setup.sh
+chmod +x setup.sh dockavel
 ./setup.sh
 ```
 
-در اولین اجرا، اگر `.env` وجود نداشته باشد، از روی `.env.example` ساخته می‌شود.
+در اولین اجرا اگر `.env` وجود نداشته باشد از `.env.example` ساخته می‌شود.
 
-setup به‌ترتیب از شما می‌خواهد موارد زیر را انتخاب کنید:
+setup از شما می‌خواهد این موارد را انتخاب کنید:
 
 1. منبع دانلود
 2. نسخه‌های PHP
 3. دیتابیس‌ها
 4. سرویس‌های اختیاری
 5. ابزارهای مدیریت دیتابیس
-6. build و start شدن استک
+6. build/start شدن استک
 
-کلیدهای کنترل:
+کلیدها:
 
 - `↑` و `↓` برای جابه‌جایی
-- `Space` برای انتخاب یا برداشتن انتخاب
+- `Space` برای انتخاب یا حذف انتخاب
 - `Enter` برای تأیید
 
 مثال:
@@ -174,28 +184,26 @@ Database tools
 [ ] pgAdmin
 ```
 
-در این حالت مقدار زیر در `.env` ساخته می‌شود:
+نتیجه ممکن است این باشد:
 
 ```env
 COMPOSE_PROFILES=php82,php85,mysql,postgres,redis,node,mysql-ui
 ```
 
-قبل از اجرای استک، setup ابتدا Compose configuration را validate می‌کند.
-
-اگر گزینه Build and start را انتخاب کنید، رفتار معادل این دستورات است:
+وقتی Build and start را انتخاب کنید رفتار معادل این دستورات است:
 
 ```bash
 docker compose pull --ignore-buildable
 docker compose up -d --build
 ```
 
-گزینه `--ignore-buildable` باعث می‌شود سرویس‌های PHP و Node که قرار است روی سیستم محلی build شوند، به اشتباه به‌عنوان image آماده از registry درخواست نشوند.
+`--ignore-buildable` مانع می‌شود Compose سرویس‌های PHP و Node را که باید local build شوند به‌اشتباه مثل image آماده Dockavel pull کند.
 
 ## منبع‌های دانلود
 
 Dockavel منبع Docker image و package repositoryها را در قالب یک preset مدیریت می‌کند.
 
-وقتی یک preset منطقه‌ای انتخاب می‌شود، Dockavel به‌صورت عمدی برای سرویس‌هایش fallback مخفی به registry دیگری انجام نمی‌دهد.
+وقتی preset منطقه‌ای انتخاب می‌شود، Dockavel به‌صورت عمدی fallback مخفی به registry دیگری انجام نمی‌دهد.
 
 ### Official / Global
 
@@ -216,23 +224,16 @@ Composer          : composer.iranserver.com
 npm               : npm.iranserver.com
 ```
 
-برای مثال PHP 8.2 از این مسیر دریافت می‌شود:
+نمونه base imageها از طریق mirror:
 
 ```text
-docker.iranserver.com/serversideup/php:8.2-fpm
-```
-
-و Node.js:
-
-```text
+docker.iranserver.com/serversideup/php:8.5-fpm
 docker.iranserver.com/library/node:24-bookworm-slim
 ```
 
 ### Iran / Runflare
 
-در این حالت Docker، Debian، Composer و npm از mirrorهای Runflare استفاده می‌شوند.
-
-محدودیت درخواست، quota و availability این سرویس توسط Runflare تعیین می‌شود و ممکن است در طول زمان تغییر کند.
+Docker، Debian، Composer و npm از mirrorهای Runflare استفاده می‌شوند. Availability و quota این سرویس توسط Runflare کنترل می‌شود و ممکن است تغییر کند.
 
 ### China / regional mirrors
 
@@ -243,7 +244,7 @@ docker.iranserver.com/library/node:24-bookworm-slim
 
 ### Custom endpoints
 
-در حالت Custom می‌توانید این مقادیر را خودتان تعیین کنید:
+در حالت Custom می‌توانید این مقادیر را تعیین کنید:
 
 - Docker library prefix
 - Docker namespace prefix
@@ -253,39 +254,75 @@ docker.iranserver.com/library/node:24-bookworm-slim
 - npm registry
 - npm strict SSL
 
-این تنظیمات در `.env` ذخیره می‌شوند و نیازی به تغییر فایل‌های commit‌شده نیست.
+مقادیر در `.env` ذخیره می‌شوند.
 
-## نحوه کار PHP Runtimeها
+## Doctor: عیب‌یابی محیط
 
-برای همه نسخه‌های PHP فقط یک `Dockerfile` وجود دارد.
+اجرا:
 
-نسخه PHP از طریق `PHP_VERSION` تعیین می‌شود.
-
-نمونه upstreamها:
-
-```text
-serversideup/php:8.2-fpm
-serversideup/php:8.3-fpm
-serversideup/php:8.4-fpm
-serversideup/php:8.5-fpm
+```bash
+./dockavel doctor
 ```
 
-prefix مربوط به Docker namespace بر اساس source preset به Dockerfile ارسال می‌شود.
+Doctor کاملاً **read-only** است. `.env`، Docker، DNS، mirrorها، containerها یا hosts سیستم را تغییر نمی‌دهد.
 
-نام سرویس‌های PHP:
+مواردی که فعلاً بررسی می‌کند:
+
+- Docker CLI
+- Docker daemon
+- Docker Compose
+- تشخیص WSL
+- وجود `.env`
+- وضعیت پورت 80
+- preset دانلود انتخاب‌شده
+- دسترسی به Docker registry
+- دسترسی به Debian mirror
+- دسترسی به Debian security mirror
+- دسترسی به Composer repository
+- دسترسی به npm registry
+- HTTP status، زمان پاسخ و IP مقصد
+- وضعیت سرویس‌های فعال
+- health کانتینرهایی که healthcheck دارند
+
+نمونه:
 
 ```text
-php82
-php83
-php84
-php85
+Dockavel Doctor
+===============
+
+System
+------
+Docker CLI               ✅ Docker version ...
+Docker daemon            ✅ reachable
+Docker Compose           ✅ Docker Compose version ...
+WSL                      ✅ detected
+Port 80                  ✅ used by dockavel-nginx
+
+Download source
+---------------
+Selected preset          ℹ️  iranserver
+Docker registry          ✅ HTTP 401 · 0.37s · 185.x.x.x
+Composer                 ✅ HTTP 200 · 0.34s · 185.x.x.x
+npm                      ✅ HTTP 200 · 0.44s · 185.x.x.x
 ```
 
-سرویس `php82` برای backward compatibility یک network alias به نام `php` نیز دارد.
+برای endpoint `/v2/` رجیستری Docker، پاسخ `HTTP 401` به معنی reachable بودن registry در نظر گرفته می‌شود چون ممکن است authentication لازم باشد.
+
+اگر route پیش‌فرض fail شود Doctor یک retry فقط با IPv4 انجام می‌دهد تا مشکل route/IPv6 را تشخیص دهد؛ بدون اینکه تنظیم شبکه سیستم را تغییر دهد.
+
+## تست منبع دانلود فعلی
+
+```bash
+./dockavel source:test
+```
+
+این دستور فقط endpointهای موجود در `.env` را تست می‌کند و preset را تغییر نمی‌دهد.
+
+برای شرایط اینترنت ناپایدار یا محدود، قبل از pull/build بزرگ مفید است.
 
 ## اضافه کردن سرویس به استک موجود
 
-برای اضافه کردن سرویس جدید لازم نیست کل Dockavel را حذف و از ابتدا نصب کنید.
+برای اضافه کردن سرویس لازم نیست کل محیط را حذف کنید.
 
 دوباره اجرا کنید:
 
@@ -293,21 +330,7 @@ php85
 ./setup.sh
 ```
 
-انتخاب‌های قبلی را نگه دارید و سرویس جدید را هم تیک بزنید.
-
-مثلاً اگر ابتدا این تنظیمات را داشته باشید:
-
-```env
-COMPOSE_PROFILES=php82,php85,mysql,redis,node,mysql-ui
-```
-
-بعداً می‌توانید PostgreSQL را اضافه کنید:
-
-```env
-COMPOSE_PROFILES=php82,php85,mysql,postgres,redis,node,mysql-ui
-```
-
-Docker Compose تا جای ممکن imageها، build cache، volumeها و containerهای بدون تغییر را reuse می‌کند و سرویس جدید را اضافه می‌کند.
+انتخاب‌های قبلی را نگه دارید و سرویس جدید را اضافه کنید. Compose تا جای ممکن imageها، build cache، volumeها و containerهای بدون تغییر را reuse می‌کند.
 
 اجرای مجدد setup باعث حذف volumeهای دیتابیس نمی‌شود.
 
@@ -317,8 +340,13 @@ Docker Compose تا جای ممکن imageها، build cache، volumeها و cont
 Dockavel/
 ├── projects/
 │   ├── legacy-crm/
+│   │   └── .dockavel.yml
 │   ├── booking-api/
+│   │   └── .dockavel.yml
 │   └── frontend/
+│       └── .dockavel.yml
+├── lib/
+│   └── project-manager.sh
 ├── nginx/
 │   ├── conf.d/
 │   ├── template-laravel.conf.example
@@ -326,69 +354,138 @@ Dockavel/
 ├── Dockerfile
 ├── Dockerfile-node
 ├── docker-compose.yml
+├── dockavel
 ├── setup.sh
 └── .env
 ```
 
-## اضافه کردن پروژه Laravel
+فایل‌های پروژه‌های local، Nginx configهای تولیدشده، `.dockavel.yml` داخل پروژه‌ها و `.env` machine-specific هستند و قرار نیست وارد repository اصلی Dockavel شوند.
 
-پروژه را داخل این مسیر قرار دهید:
+## Project Manager
 
-```text
-projects/my-api
+Project Manager یک پروژه **موجود** داخل `projects/` را register می‌کند. خودش پروژه Laravel یا Node جدید ایجاد نمی‌کند.
+
+### افزودن پروژه
+
+```bash
+./dockavel project:add
 ```
 
-سپس برای آن Nginx config بسازید:
+این دستور:
+
+- Laravel را از `artisan` و `composer.json` تشخیص می‌دهد
+- Node.js را از `package.json` تشخیص می‌دهد
+- نام و دامنه local را می‌گیرد
+- فقط PHP runtimeهایی را نشان می‌دهد که در Stack فعلی فعال‌اند
+- فقط دیتابیس‌هایی را پیشنهاد می‌دهد که فعال‌اند
+- در صورت موجود بودن Redis و Node درباره استفاده از آن‌ها سؤال می‌کند
+- metadata پروژه را می‌سازد
+- Nginx config را از templateهای موجود تولید می‌کند
+- قبل از اعمال config، Nginx را validate می‌کند
+- در صورت اجرا بودن Nginx آن را reload می‌کند
+- اگر validation یا apply شکست بخورد فایل‌های ایجادشده را rollback می‌کند
+- hosts سیستم را خودکار تغییر نمی‌دهد و فقط خط لازم را نمایش می‌دهد
+
+نمونه metadata:
+
+```yaml
+version: 1
+name: "my-api"
+type: "laravel"
+path: "my-api"
+domain: "my-api.local"
+php: "8.5"
+database: "postgres"
+redis: true
+node: true
+```
+
+برای پروژه Node به‌جای PHP version، پورت داخلی برنامه ذخیره می‌شود.
+
+### لیست پروژه‌ها
+
+```bash
+./dockavel project:list
+```
+
+نمونه:
 
 ```text
+NAME                 TYPE       DOMAIN                       RUNTIME        DATABASE
+my-api               laravel    my-api.local                 PHP 8.5        postgres
+frontend             node       frontend.local               Node :3000     none
+```
+
+### ویرایش پروژه
+
+انتخاب interactive:
+
+```bash
+./dockavel project:edit
+```
+
+یا مستقیم با نام پروژه:
+
+```bash
+./dockavel project:edit my-api
+```
+
+موارد قابل ویرایش:
+
+- نام پروژه
+- دامنه local
+- PHP runtime برای Laravel
+- دیتابیس
+- استفاده از Redis
+- استفاده از shared Node runtime
+- پورت پروژه‌های Node.js
+
+Path و Type پروژه هنگام edit ثابت می‌مانند.
+
+بعد از edit، metadata و Nginx config دوباره تولید می‌شوند و در صورت fail شدن validation/reload، rollback انجام می‌شود.
+
+### حذف registration پروژه
+
+Interactive:
+
+```bash
+./dockavel project:remove
+```
+
+مستقیم:
+
+```bash
+./dockavel project:remove my-api
+```
+
+`project:remove` فقط registration مربوط به Dockavel را حذف می‌کند:
+
+```text
+projects/my-api/.dockavel.yml
 nginx/conf.d/my-api.local.conf
 ```
 
-مثال برای PHP 8.5:
+**سورس پروژه و پوشه پروژه هرگز حذف نمی‌شود.**
 
-```nginx
-server {
-    listen 80;
-    server_name my-api.local;
+در صورت fail شدن Nginx validation/reload، فایل‌های Dockavel restore می‌شوند.
 
-    root /var/www/my-api/public;
-    index index.php index.html;
+## فایل hosts
 
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
+Dockavel عمداً hosts سیستم host را خودکار تغییر نمی‌دهد.
 
-    location ~ \.php$ {
-        include fastcgi_params;
-        fastcgi_pass php85:9000;
-        fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        fastcgi_param DOCUMENT_ROOT $document_root;
-    }
-
-    location ~ /\.ht {
-        deny all;
-    }
-}
-```
-
-دامنه را به hosts سیستم اضافه کنید:
+بعد از ثبت پروژه، خط نمایش‌داده‌شده را اضافه کنید. مثال:
 
 ```text
 127.0.0.1 my-api.local
 ```
 
-و Nginx را restart کنید:
-
-```bash
-docker compose restart nginx
-```
-
-همچنین می‌توانید از فایل آماده زیر شروع کنید:
+در Windows فایل hosts اینجاست:
 
 ```text
-nginx/template-laravel.conf.example
+C:\Windows\System32\drivers\etc\hosts
 ```
+
+برای ذخیره معمولاً باید editor را با Administrator باز کنید.
 
 ## اجرای چند نسخه PHP به‌صورت هم‌زمان
 
@@ -401,58 +498,55 @@ projects/
 └── new-app/       # PHP 8.5
 ```
 
-برای هر دامنه می‌توان runtime متفاوت تعیین کرد:
+Nginx هر پروژه را به runtime انتخاب‌شده وصل می‌کند:
 
-```nginx
-fastcgi_pass php82:9000;
+```text
+php82:9000
+php84:9000
+php85:9000
 ```
 
-```nginx
-fastcgi_pass php84:9000;
-```
-
-```nginx
-fastcgi_pass php85:9000;
-```
+تمام runtimeهای فعال می‌توانند هم‌زمان بالا باشند.
 
 ## دستورات PHP و Composer
 
-بررسی نسخه PHP:
+بررسی نسخه:
 
 ```bash
 docker compose exec php82 php -v
 docker compose exec php85 php -v
 ```
 
-ورود به container:
+ورود به shell PHP:
 
 ```bash
 docker compose exec php85 bash
 ```
 
-اجرای پروژه:
+تفاوت نام‌ها:
+
+```text
+Compose service : php85
+Container name  : dockavel-php85
+Local image     : dev-stack-php85
+```
+
+برای استفاده عادی بهتر است از service name استفاده شود:
 
 ```bash
 docker compose exec php85 bash
-cd /var/www/my-api
-composer install
-php artisan migrate
 ```
-
-Composer از repository انتخاب‌شده در source preset استفاده می‌کند.
 
 ## پروژه‌های Node.js
 
-Node نیز پوشه `projects/` را در `/var/www` mount می‌کند.
-
-بررسی نسخه:
+بررسی runtime مشترک:
 
 ```bash
 docker compose exec node node --version
 docker compose exec node npm --version
 ```
 
-نصب dependencyها:
+نصب dependency به‌صورت دستی:
 
 ```bash
 docker compose exec node bash
@@ -460,27 +554,17 @@ cd /var/www/frontend
 npm install
 ```
 
-پروژه‌های Node می‌توانند روی پورت‌های داخلی محدوده زیر اجرا شوند:
-
-```text
-3000-3099
-```
-
-برای Nginx reverse proxy می‌توانید از این template استفاده کنید:
-
-```text
-nginx/template-node.conf.example
-```
+پروژه Node ثبت‌شده در Project Manager از پورت داخلی محدوده `3000-3099` استفاده می‌کند و از طریق Nginx در دسترس قرار می‌گیرد.
 
 ## MySQL
 
-آدرس داخل Docker network:
+داخل Docker:
 
 ```text
 mysql:3306
 ```
 
-آدرس روی host:
+روی host:
 
 ```text
 127.0.0.1:13307
@@ -497,21 +581,17 @@ DB_USERNAME=laravel
 DB_PASSWORD=secret
 ```
 
-داده‌ها در volume زیر نگهداری می‌شوند:
-
-```text
-mysql_data
-```
+Volume دائمی: `mysql_data`.
 
 ## PostgreSQL
 
-آدرس داخل Docker network:
+داخل Docker:
 
 ```text
 postgres:5432
 ```
 
-آدرس روی host:
+روی host:
 
 ```text
 127.0.0.1:15432
@@ -528,11 +608,7 @@ DB_USERNAME=laravel
 DB_PASSWORD=secret
 ```
 
-داده‌ها در volume زیر نگهداری می‌شوند:
-
-```text
-postgres_data
-```
+Volume دائمی: `postgres_data`.
 
 ## Redis
 
@@ -565,7 +641,7 @@ REDIS_PORT=6379
 http://127.0.0.1:18080
 ```
 
-برای Server از `mysql` استفاده کنید.
+Server: `mysql`
 
 ### pgAdmin
 
@@ -575,18 +651,14 @@ http://127.0.0.1:18080
 http://127.0.0.1:18081
 ```
 
-برای اتصال PostgreSQL:
+اتصال:
 
 ```text
 Host: postgres
 Port: 5432
 ```
 
-داده‌های pgAdmin در volume زیر نگهداری می‌شوند:
-
-```text
-pgadmin_data
-```
+Volume دائمی: `pgadmin_data`.
 
 ## پورت‌های پیش‌فرض
 
@@ -601,20 +673,15 @@ pgadmin_data
 
 به‌جز Nginx، پورت‌های منتشرشده به‌صورت پیش‌فرض فقط روی `127.0.0.1` bind شده‌اند.
 
-## تنظیمات `.env`
-
-مهم‌ترین متغیرها:
+## تنظیمات مهم `.env`
 
 ```env
 UID=1000
 GID=1000
-
 COMPOSE_PROFILES=php82,php85,mysql,redis,node,mysql-ui
 DOWNLOAD_SOURCE_PRESET=official
-
 DOCKER_LIBRARY_PREFIX=docker.io/library/
 DOCKER_NAMESPACE_PREFIX=docker.io/
-
 DEBIAN_MIRROR=https://deb.debian.org/debian
 DEBIAN_SECURITY_MIRROR=https://deb.debian.org/debian-security
 COMPOSER_REPOSITORY=https://repo.packagist.org
@@ -622,113 +689,106 @@ NPM_REGISTRY=https://registry.npmjs.org/
 NPM_STRICT_SSL=true
 ```
 
-اطلاعات اتصال دیتابیس و پورت‌ها نیز در `.env` قابل تغییر هستند.
-
-اگر محیط شما فقط local نیست یا چند نفر به آن دسترسی دارند، پسوردهای پیش‌فرض را تغییر دهید.
+credentialهای دیتابیس و پورت‌ها نیز در `.env` قابل تغییرند.
 
 ## دستورات کاربردی
 
-نمایش سرویس‌های فعال:
-
 ```bash
+# عیب‌یابی Dockavel
+./dockavel doctor
+./dockavel source:test
+
+# مدیریت پروژه‌ها
+./dockavel project:add
+./dockavel project:list
+./dockavel project:edit
+./dockavel project:remove
+
+# وضعیت Stack
 docker compose ps
-```
 
-شروع استک:
-
-```bash
+# Start / Build
 docker compose up -d
-```
-
-build و start:
-
-```bash
 docker compose up -d --build
-```
 
-خاموش کردن بدون حذف volume دیتابیس:
-
-```bash
+# Stop بدون حذف volumeها
 docker compose down
-```
 
-مشاهده logها:
-
-```bash
+# Logها
 docker compose logs -f
-```
 
-بررسی Compose configuration:
-
-```bash
+# Validate Compose
 docker compose config
-```
-
-بررسی Redis:
-
-```bash
-docker compose exec redis redis-cli ping
-```
-
-بررسی PostgreSQL:
-
-```bash
-docker compose exec postgres sh -lc 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
 
 ## امنیت داده‌ها
 
-اطلاعات MySQL، PostgreSQL و pgAdmin در Docker volume نگهداری می‌شوند.
+داده‌های دیتابیس در Docker volumeهای named نگهداری می‌شوند.
 
-این دستور containerها را خاموش می‌کند ولی volumeها را حذف نمی‌کند:
+این دستور volumeها را حذف نمی‌کند:
 
 ```bash
 docker compose down
 ```
 
-اما این دستور مخرب است و volumeها را حذف می‌کند:
+این دستور مخرب است و volumeها را حذف می‌کند:
 
 ```bash
 docker compose down -v
 ```
 
-از گزینه `-v` فقط زمانی استفاده کنید که واقعاً قصد پاک کردن کامل داده‌های local را دارید.
+از `-v` فقط زمانی استفاده کنید که واقعاً قصد پاک کردن داده‌های local را دارید.
+
+`project:remove` متفاوت است: فقط metadata و Nginx registration را حذف می‌کند و هرگز سورس پروژه را پاک نمی‌کند.
 
 ## رفع اشکال
 
+### قبل از rebuild عیب‌یابی کنید
+
+اول اجرا کنید:
+
+```bash
+./dockavel doctor
+```
+
+برای تست فقط sourceها:
+
+```bash
+./dockavel source:test
+```
+
+این کار کمک می‌کند مشکل Docker/project را از DNS، TLS، timeout، mirror یا route جدا کنید و بی‌دلیل وارد rebuildهای سنگین نشوید.
+
 ### پورت 80 اشغال است
 
-سرویس یا container دیگری که از پورت 80 استفاده می‌کند را متوقف کنید یا mapping مربوط به Nginx را تغییر دهید.
+Doctor مشخص می‌کند پورت 80 آزاد است، توسط `dockavel-nginx` استفاده می‌شود یا سرویس دیگری آن را گرفته است.
 
 ### mirror منطقه‌ای image را پیدا نمی‌کند
 
-باید بررسی شود که mirror انتخاب‌شده image upstream موردنظر را واقعاً proxy یا mirror می‌کند.
+بررسی کنید mirror انتخاب‌شده واقعاً image upstream را proxy/mirror می‌کند. Dockavel برای preset منطقه‌ای fallback مخفی به registry دیگر انجام نمی‌دهد.
 
-Dockavel هنگام انتخاب source منطقه‌ای به‌صورت عمدی fallback مخفی به registry دیگری انجام نمی‌دهد.
+در صورت نیاز `./setup.sh` را دوباره اجرا کنید و preset دیگری یا `Custom endpoints` را صریح انتخاب کنید.
 
-برای تغییر source دوباره اجرا کنید:
+### اضافه کردن سرویس بدون حذف استک
 
 ```bash
 ./setup.sh
 ```
 
-و preset دیگری یا `Custom endpoints` را انتخاب کنید.
+سرویس‌های قبلی را انتخاب نگه دارید و سرویس جدید را اضافه کنید.
 
-### اضافه کردن سرویس جدید
-
-دوباره `./setup.sh` را اجرا کنید، سرویس‌های قبلی را انتخاب نگه دارید و سرویس جدید را اضافه کنید.
-
-برای بررسی نتیجه:
+### بررسی وضعیت فعلی
 
 ```bash
 grep '^COMPOSE_PROFILES=' .env
 docker compose config
 docker compose ps -a
+./dockavel project:list
 ```
 
-## فایل‌های local و Git
+## فایل‌های Local و Git
 
-این موارد عمداً commit نمی‌شوند:
+موارد زیر عمداً machine-specific هستند:
 
 ```text
 projects/*
@@ -736,48 +796,50 @@ nginx/conf.d/*
 .env
 ```
 
-به این ترتیب سورس پروژه‌های local، دامنه‌ها، credentialها و تنظیمات مخصوص هر سیستم وارد repository Dockavel نمی‌شوند.
+به این ترتیب سورس پروژه‌های local، دامنه‌ها، credentialها و تنظیمات هر سیستم وارد repository اصلی Dockavel نمی‌شوند.
 
 ## CI
 
-GitHub Actions موارد زیر را بررسی می‌کند:
+GitHub Actions فعلاً این موارد را بررسی می‌کند:
 
 - چند ترکیب مختلف Compose profile
 - build نسخه‌های PHP 8.2، 8.3، 8.4 و 8.5
-- قابلیت‌های ضروری runtimeهای PHP
-- build و runtime مربوط به Node.js 24
-- syntax اسکریپت‌های Bash و POSIX shell
-
-هدف این است که خطاهای Compose و runtime قبل از ورود تغییرات به `main` مشخص شوند.
+- قابلیت‌های ضروری PHP runtimeها
+- build/runtime مربوط به Node.js 24
+- syntax مربوط به `setup.sh`، `dockavel` و Project Manager
+- executable بودن CLI اصلی
 
 ## Roadmap
 
-مرحله بعدی پروژه، مدیریت configuration هر پروژه به‌صورت مستقل است.
+پایه‌های اصلی تکمیل‌شده:
 
-نمونه metadata آینده:
-
-```yaml
-name: ledger
-local_domain: ledger.local
-php: "8.5"
-database: postgres
-redis: true
-node: false
+```text
+✅ Configurable stack
+✅ Multiple PHP runtimes
+✅ Regional download sources
+✅ MySQL / PostgreSQL / Redis / Node
+✅ Doctor / source diagnostics
+✅ Project add / list / edit / remove
 ```
 
-فرمان برنامه‌ریزی‌شده:
+لایه بعدی برای راحت‌تر شدن کار روزمره:
 
-```bash
-./dockavel project:add
+```text
+./dockavel shell my-api
+./dockavel artisan my-api migrate
+./dockavel composer my-api install
+./dockavel npm frontend install
 ```
 
-هدف این است که Dockavel در آینده Nginx config و runtime mapping هر پروژه را خودش تولید و مدیریت کند و نیاز به تنظیم دستی پروژه‌ها کمتر شود.
+این shortcutها از metadata پروژه استفاده می‌کنند تا کاربر لازم نباشد container name یا runtime mapping را حفظ کند.
+
+قابلیت‌های بعدی هم فقط در صورتی وارد Core می‌شوند که واقعاً setup، مدیریت پروژه یا debug را ساده‌تر کنند.
 
 ## مشارکت
 
-Issue و Pull Request برای پروژه پذیرفته می‌شود.
+Issue و Pull Request پذیرفته می‌شود.
 
-در تغییرات مربوط به runtime، source، mirror یا installer بهتر است رفتار هر preset شفاف باقی بماند و dependency یا registry fallback مخفی اضافه نشود.
+در تغییرات مربوط به runtime، source، mirror، installer یا Project Manager بهتر است رفتار presetها شفاف بماند و dependency یا registry fallback مخفی اضافه نشود.
 
 ## License
 
