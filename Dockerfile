@@ -1,6 +1,10 @@
 ARG PHP_VERSION=8.5
+ARG DOCKER_LIBRARY_PREFIX=
+ARG GHCR_PREFIX=ghcr.io/
 
-FROM php:${PHP_VERSION}-fpm
+FROM ${GHCR_PREFIX}php/pie:bin AS pie
+FROM ${DOCKER_LIBRARY_PREFIX}composer:2 AS composer
+FROM ${DOCKER_LIBRARY_PREFIX}php:${PHP_VERSION}-fpm
 
 ARG UID=1000
 ARG GID=1000
@@ -20,8 +24,6 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 WORKDIR /var/www
 
-# Configure Debian mirrors independently so failures in later build steps do not
-# invalidate already downloaded package metadata and dependencies.
 RUN set -eux; \
     if [ -f /etc/apt/sources.list ]; then \
         sed -i \
@@ -46,8 +48,6 @@ RUN set -eux; \
                 {} +; \
     fi
 
-# Network operations use retries/timeouts because local development environments
-# are frequently built behind slow, unstable, proxied, or filtered connections.
 RUN set -eux; \
     apt-get \
         -o Acquire::Retries=5 \
@@ -86,8 +86,6 @@ RUN set -eux; \
         zip; \
     update-ca-certificates
 
-# Build extensions bundled with the official PHP image separately. This layer is
-# cached even if a later PECL download fails.
 RUN set -eux; \
     docker-php-ext-configure gd --with-freetype --with-jpeg; \
     docker-php-ext-configure intl; \
@@ -101,25 +99,28 @@ RUN set -eux; \
         pdo_pgsql \
         zip
 
-# Redis comes from PECL. Retry independently so a transient pecl.php.net failure
-# does not force Debian packages and PHP extensions to rebuild from scratch.
+COPY --from=pie /pie /usr/local/bin/pie
+COPY --from=composer /usr/bin/composer /usr/bin/composer
+
+# Install Redis through PIE so both the PIE image and package repository can be
+# redirected by the selected download source profile.
 RUN set -eux; \
+    chmod +x /usr/local/bin/pie; \
+    pie repository:remove packagist.org || true; \
+    pie repository:add composer "${COMPOSER_REPOSITORY}"; \
     installed=0; \
     attempt=1; \
     while [ "$attempt" -le 5 ]; do \
-        if printf '\n\n\n\n\n\n' | pecl install -f redis; then \
+        if pie install --no-cache "phpredis/phpredis:^6.3"; then \
             installed=1; \
             break; \
         fi; \
-        echo "PECL Redis install failed (attempt ${attempt}/5). Retrying in 10 seconds..."; \
+        echo "PIE Redis install failed (attempt ${attempt}/5). Retrying in 10 seconds..."; \
         attempt=$((attempt + 1)); \
         sleep 10; \
     done; \
     [ "$installed" -eq 1 ]; \
-    docker-php-ext-enable redis; \
     php -m | grep -qx redis
-
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 RUN set -eux; \
     if ! getent group "${GID}" >/dev/null 2>&1; then \
