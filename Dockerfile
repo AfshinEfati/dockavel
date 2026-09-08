@@ -4,8 +4,8 @@ FROM php:${PHP_VERSION}-fpm
 
 ARG UID=1000
 ARG GID=1000
-ARG DEBIAN_MIRROR=http://deb.debian.org/debian
-ARG DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security
+ARG DEBIAN_MIRROR=https://deb.debian.org/debian
+ARG DEBIAN_SECURITY_MIRROR=https://deb.debian.org/debian-security
 ARG COMPOSER_REPOSITORY=https://repo.packagist.org
 
 ENV DEBIAN_FRONTEND=noninteractive \
