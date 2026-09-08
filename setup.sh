@@ -256,7 +256,7 @@ print_header() {
 ╚══════════════════════════════════════╝
 
 Choose only the runtimes and services you actually need.
-Dockavel pulls prebuilt PHP/Node runtimes, so setup does not compile extensions locally.
+Each regional preset keeps runtime images and package downloads on that preset's configured route.
 HEADER
 }
 
@@ -267,7 +267,7 @@ select_download_source() {
     case "$preset" in
         official) default_index=0 ;;
         iranserver) default_index=1 ;;
-        iran|runflare) default_index=2 ;;
+        runflare|iran) default_index=2 ;;
         china) default_index=3 ;;
         custom) default_index=4 ;;
         *) default_index=0 ;;
@@ -275,8 +275,8 @@ select_download_source() {
 
     choose_one "Download source" "$default_index" \
         "Official / Global" \
-        "Iran / IranServer (recommended)" \
-        "Iran / Runflare (GHCR proxy, quota-limited)" \
+        "Iran / IranServer" \
+        "Iran / Runflare" \
         "China / regional mirrors" \
         "Custom endpoints"
 
@@ -284,10 +284,9 @@ select_download_source() {
         0)
             DOWNLOAD_SOURCE_PRESET="official"
             SOURCE_LABEL="Official / Global"
-            DOCKAVEL_RUNTIME_PREFIX="ghcr.io/afshinefati/"
-            DOCKER_LIBRARY_PREFIX=""
-            DOCKER_NAMESPACE_PREFIX=""
-            GHCR_PREFIX="ghcr.io/"
+            DOCKAVEL_RUNTIME_PREFIX="docker.io/afshinefati/"
+            DOCKER_LIBRARY_PREFIX="docker.io/library/"
+            DOCKER_NAMESPACE_PREFIX="docker.io/"
             DEBIAN_MIRROR="https://deb.debian.org/debian"
             DEBIAN_SECURITY_MIRROR="https://deb.debian.org/debian-security"
             COMPOSER_REPOSITORY="https://repo.packagist.org"
@@ -297,13 +296,9 @@ select_download_source() {
         1)
             DOWNLOAD_SOURCE_PRESET="iranserver"
             SOURCE_LABEL="Iran / IranServer"
-            # IranServer mirrors Docker Hub, Debian, Composer and npm. Dockavel's
-            # prebuilt runtimes currently live on GHCR, so those few images are
-            # pulled directly from GHCR instead of consuming Runflare quota.
-            DOCKAVEL_RUNTIME_PREFIX="ghcr.io/afshinefati/"
+            DOCKAVEL_RUNTIME_PREFIX="docker.iranserver.com/afshinefati/"
             DOCKER_LIBRARY_PREFIX="docker.iranserver.com/library/"
             DOCKER_NAMESPACE_PREFIX="docker.iranserver.com/"
-            GHCR_PREFIX="ghcr.io/"
             DEBIAN_MIRROR="https://mirror.iranserver.com/debian"
             DEBIAN_SECURITY_MIRROR="https://mirror.iranserver.com/debian-security"
             COMPOSER_REPOSITORY="https://composer.iranserver.com/repository/composer/"
@@ -316,7 +311,6 @@ select_download_source() {
             DOCKAVEL_RUNTIME_PREFIX="mirror-docker.runflare.com/afshinefati/"
             DOCKER_LIBRARY_PREFIX="mirror-docker.runflare.com/library/"
             DOCKER_NAMESPACE_PREFIX="mirror-docker.runflare.com/"
-            GHCR_PREFIX="mirror-docker.runflare.com/"
             DEBIAN_MIRROR="http://mirror-linux.runflare.com/debian"
             DEBIAN_SECURITY_MIRROR="http://mirror-linux.runflare.com/debian-security"
             COMPOSER_REPOSITORY="https://mirror-composer.runflare.com"
@@ -326,10 +320,9 @@ select_download_source() {
         3)
             DOWNLOAD_SOURCE_PRESET="china"
             SOURCE_LABEL="China / regional mirrors"
-            DOCKAVEL_RUNTIME_PREFIX="m.daocloud.io/ghcr.io/afshinefati/"
+            DOCKAVEL_RUNTIME_PREFIX="m.daocloud.io/docker.io/afshinefati/"
             DOCKER_LIBRARY_PREFIX="m.daocloud.io/docker.io/library/"
             DOCKER_NAMESPACE_PREFIX="m.daocloud.io/docker.io/"
-            GHCR_PREFIX="m.daocloud.io/ghcr.io/"
             DEBIAN_MIRROR="https://mirrors.tuna.tsinghua.edu.cn/debian"
             DEBIAN_SECURITY_MIRROR="https://mirrors.tuna.tsinghua.edu.cn/debian-security"
             COMPOSER_REPOSITORY="https://mirrors.aliyun.com/composer/"
@@ -345,16 +338,12 @@ select_download_source() {
             DOCKAVEL_RUNTIME_PREFIX="$PROMPT_RESULT"
 
             current="$(get_env_value DOCKER_LIBRARY_PREFIX)"
-            prompt_registry_prefix "Docker Hub library prefix (- to clear)" "$current" 1
+            prompt_registry_prefix "Docker library image prefix" "$current" 0
             DOCKER_LIBRARY_PREFIX="$PROMPT_RESULT"
 
             current="$(get_env_value DOCKER_NAMESPACE_PREFIX)"
-            prompt_registry_prefix "Docker Hub namespace prefix (- to clear)" "$current" 1
+            prompt_registry_prefix "Docker namespace image prefix" "$current" 0
             DOCKER_NAMESPACE_PREFIX="$PROMPT_RESULT"
-
-            current="$(get_env_value GHCR_PREFIX)"
-            prompt_registry_prefix "GHCR-compatible build prefix" "$current" 0
-            GHCR_PREFIX="$PROMPT_RESULT"
 
             current="$(get_env_value DEBIAN_MIRROR)"
             prompt_url "Debian package mirror" "$current"
@@ -383,7 +372,6 @@ select_download_source() {
     set_env_value "DOCKAVEL_RUNTIME_PREFIX" "$DOCKAVEL_RUNTIME_PREFIX"
     set_env_value "DOCKER_LIBRARY_PREFIX" "$DOCKER_LIBRARY_PREFIX"
     set_env_value "DOCKER_NAMESPACE_PREFIX" "$DOCKER_NAMESPACE_PREFIX"
-    set_env_value "GHCR_PREFIX" "$GHCR_PREFIX"
     set_env_value "DEBIAN_MIRROR" "$DEBIAN_MIRROR"
     set_env_value "DEBIAN_SECURITY_MIRROR" "$DEBIAN_SECURITY_MIRROR"
     set_env_value "COMPOSER_REPOSITORY" "$COMPOSER_REPOSITORY"
@@ -481,7 +469,10 @@ COMPOSE_PROFILES="$PROFILES_CSV" docker compose config >/dev/null
 printf '\nConfiguration\n-------------\n'
 printf 'Download source : %s\n' "$SOURCE_LABEL"
 printf 'Dockavel images : %s\n' "$DOCKAVEL_RUNTIME_PREFIX"
-printf 'Docker library  : %s\n' "${DOCKER_LIBRARY_PREFIX:-docker.io/library/}"
+printf 'Docker library  : %s\n' "$DOCKER_LIBRARY_PREFIX"
+printf 'Docker namespace: %s\n' "$DOCKER_NAMESPACE_PREFIX"
+printf 'Debian          : %s\n' "$DEBIAN_MIRROR"
+printf 'Debian security : %s\n' "$DEBIAN_SECURITY_MIRROR"
 printf 'Composer        : %s\n' "$COMPOSER_REPOSITORY"
 printf 'npm             : %s\n' "$NPM_REGISTRY"
 printf 'PHP runtimes    : %s\n' "$(IFS=', '; echo "${PHP_LABELS[*]}")"
@@ -494,8 +485,7 @@ printf 'pgAdmin         : %s\n' "$([[ "$PGADMIN_ENABLED" -eq 1 ]] && echo Yes ||
 printf '\nCOMPOSE_PROFILES=%s\n' "$PROFILES_CSV"
 
 if [[ "$DOWNLOAD_SOURCE_PRESET" == "runflare" ]]; then
-    printf '\nNote: Runflare currently limits free mirror usage to 500 requests per IP.\n'
-    printf 'A 402 Payment Required response normally means that quota has been exhausted.\n'
+    printf '\nNote: Runflare may enforce a request quota on its free mirror service.\n'
 fi
 
 choose_one "Pull and start the selected stack now?" 0 \
