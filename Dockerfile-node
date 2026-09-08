@@ -1,15 +1,17 @@
-FROM node:24-bookworm-slim
+ARG DOCKER_LIBRARY_PREFIX=
+FROM ${DOCKER_LIBRARY_PREFIX}node:24-bookworm-slim
 
 ARG UID=1000
 ARG GID=1000
-
 ARG DEBIAN_MIRROR=https://deb.debian.org/debian
 ARG DEBIAN_SECURITY_MIRROR=https://deb.debian.org/debian-security
 ARG NPM_REGISTRY=https://registry.npmjs.org/
+ARG NPM_STRICT_SSL=true
 
 ENV DEBIAN_FRONTEND=noninteractive \
     NPM_CONFIG_REGISTRY=${NPM_REGISTRY} \
     npm_config_registry=${NPM_REGISTRY} \
+    NPM_CONFIG_STRICT_SSL=${NPM_STRICT_SSL} \
     NPM_CONFIG_FETCH_RETRIES=20 \
     NPM_CONFIG_FETCH_RETRY_FACTOR=2 \
     NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
@@ -73,6 +75,7 @@ RUN set -eux; \
 
 RUN set -eux; \
     printf 'registry=%s\n' "${NPM_REGISTRY}" > /usr/local/etc/npmrc; \
+    printf 'strict-ssl=%s\n' "${NPM_STRICT_SSL}" >> /usr/local/etc/npmrc; \
     printf 'fetch-retries=20\n' >> /usr/local/etc/npmrc; \
     printf 'fetch-retry-factor=2\n' >> /usr/local/etc/npmrc; \
     printf 'fetch-retry-mintimeout=20000\n' >> /usr/local/etc/npmrc; \
