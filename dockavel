@@ -1,0 +1,342 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$ROOT_DIR/.env"
+ENV_EXAMPLE="$ROOT_DIR/.env.example"
+
+OK='✅'
+WARN='⚠️ '
+FAIL='❌'
+INFO='ℹ️ '
+
+print_help() {
+    cat <<'HELP'
+Dockavel
+
+Usage:
+  ./dockavel doctor
+  ./dockavel source:test
+  ./dockavel help
+
+Commands:
+  doctor       Diagnose Docker, WSL, selected download sources, ports and stack health.
+  source:test  Test the download endpoints currently configured in .env without changing anything.
+  help         Show this help.
+HELP
+}
+
+get_env_value() {
+    local key="$1" file="${2:-$ENV_FILE}"
+    [[ -f "$file" ]] || return 0
+    grep -m1 "^${key}=" "$file" | cut -d= -f2- || true
+}
+
+load_env_value() {
+    local key="$1" value
+    value="$(get_env_value "$key" "$ENV_FILE")"
+    if [[ -z "$value" ]]; then
+        value="$(get_env_value "$key" "$ENV_EXAMPLE")"
+    fi
+    printf '%s' "$value"
+}
+
+command_version() {
+    "$@" 2>/dev/null | head -n1 || true
+}
+
+print_row() {
+    local label="$1" status="$2" detail="${3:-}"
+    if [[ -n "$detail" ]]; then
+        printf '%-24s %s %s\n' "$label" "$status" "$detail"
+    else
+        printf '%-24s %s\n' "$label" "$status"
+    fi
+}
+
+curl_error_detail() {
+    local code="$1" message="${2:-}"
+
+    case "$code" in
+        5) printf 'proxy DNS failure' ;;
+        6) printf 'DNS resolution failed' ;;
+        7) printf 'TCP connection failed' ;;
+        28) printf 'timeout' ;;
+        35) printf 'TLS handshake failed' ;;
+        47) printf 'too many redirects' ;;
+        52) printf 'empty response' ;;
+        56) printf 'connection reset / receive failed' ;;
+        60) printf 'TLS certificate validation failed' ;;
+        *)
+            if [[ -n "$message" ]]; then
+                printf 'curl %s · %s' "$code" "$message"
+            else
+                printf 'curl error %s' "$code"
+            fi
+            ;;
+    esac
+}
+
+run_curl_probe() {
+    local url="$1" family="${2:-auto}" result rc stderr_file stderr_text family_args=()
+
+    [[ "$family" == "ipv4" ]] && family_args=(-4)
+
+    stderr_file="$(mktemp)"
+    result="$(curl "${family_args[@]}" -k -L -sS -o /dev/null \
+        --connect-timeout 5 \
+        --max-time 12 \
+        -w '%{http_code}|%{time_total}|%{remote_ip}' \
+        "$url" 2>"$stderr_file")"
+    rc=$?
+    stderr_text="$(tr '\n' ' ' < "$stderr_file" | sed -E 's/[[:space:]]+$//')"
+    rm -f "$stderr_file"
+
+    CURL_RESULT="$result"
+    CURL_RC="$rc"
+    CURL_STDERR="$stderr_text"
+
+    return "$rc"
+}
+
+http_probe() {
+    local url="$1" code time_total remote_ip failure_detail
+
+    if ! command -v curl >/dev/null 2>&1; then
+        PROBE_STATUS="missing-curl"
+        PROBE_DETAIL="curl is not installed"
+        return 2
+    fi
+
+    if ! run_curl_probe "$url" auto; then
+        failure_detail="$(curl_error_detail "$CURL_RC" "$CURL_STDERR")"
+
+        # Restricted or partially broken networks sometimes advertise IPv6 even
+        # when the route is unusable. A read-only IPv4 retry helps identify that
+        # case without changing DNS or system configuration.
+        if run_curl_probe "$url" ipv4; then
+            IFS='|' read -r code time_total remote_ip <<< "$CURL_RESULT"
+            if [[ "$code" =~ ^(2|3)[0-9][0-9]$ || "$code" == "401" || "$code" == "403" ]]; then
+                PROBE_STATUS="ipv4-only"
+                PROBE_DETAIL="IPv4 works · HTTP $code · ${time_total}s${remote_ip:+ · $remote_ip}"
+                return 3
+            fi
+        fi
+
+        PROBE_STATUS="failed"
+        PROBE_DETAIL="$failure_detail"
+        return 1
+    fi
+
+    IFS='|' read -r code time_total remote_ip <<< "$CURL_RESULT"
+
+    if [[ "$code" =~ ^(2|3)[0-9][0-9]$ || "$code" == "401" || "$code" == "403" ]]; then
+        PROBE_STATUS="ok"
+        PROBE_DETAIL="HTTP $code · ${time_total}s${remote_ip:+ · $remote_ip}"
+        return 0
+    fi
+
+    PROBE_STATUS="failed"
+    PROBE_DETAIL="HTTP $code · ${time_total}s${remote_ip:+ · $remote_ip}"
+    return 1
+}
+
+registry_probe_url() {
+    local prefix="$1" host
+    prefix="${prefix#http://}"
+    prefix="${prefix#https://}"
+    host="${prefix%%/*}"
+    [[ -n "$host" ]] && printf 'https://%s/v2/' "$host"
+}
+
+composer_probe_url() {
+    local url="$1"
+    url="${url%/}"
+
+    [[ -n "$url" ]] || return 0
+
+    if [[ "$url" == */packages.json ]]; then
+        printf '%s' "$url"
+    else
+        printf '%s/packages.json' "$url"
+    fi
+}
+
+probe_row() {
+    local label="$1" url="$2"
+    if [[ -z "$url" ]]; then
+        print_row "$label" "$WARN" "not configured"
+        return 0
+    fi
+
+    if http_probe "$url"; then
+        print_row "$label" "$OK" "$PROBE_DETAIL"
+        return 0
+    fi
+
+    case "$PROBE_STATUS" in
+        missing-curl) print_row "$label" "$WARN" "$PROBE_DETAIL" ;;
+        ipv4-only) print_row "$label" "$WARN" "$PROBE_DETAIL" ;;
+        *) print_row "$label" "$FAIL" "$PROBE_DETAIL" ;;
+    esac
+}
+
+source_test() {
+    local preset docker_library docker_namespace debian debian_security composer npm registry_url composer_url
+
+    preset="$(load_env_value DOWNLOAD_SOURCE_PRESET)"
+    docker_library="$(load_env_value DOCKER_LIBRARY_PREFIX)"
+    docker_namespace="$(load_env_value DOCKER_NAMESPACE_PREFIX)"
+    debian="$(load_env_value DEBIAN_MIRROR)"
+    debian_security="$(load_env_value DEBIAN_SECURITY_MIRROR)"
+    composer="$(load_env_value COMPOSER_REPOSITORY)"
+    npm="$(load_env_value NPM_REGISTRY)"
+
+    registry_url="$(registry_probe_url "${docker_namespace:-$docker_library}")"
+    composer_url="$(composer_probe_url "$composer")"
+
+    printf '\nDownload source\n---------------\n'
+    print_row "Selected preset" "$INFO" "${preset:-unknown}"
+    probe_row "Docker registry" "$registry_url"
+    probe_row "Debian mirror" "$debian"
+    probe_row "Debian security" "$debian_security"
+    probe_row "Composer" "$composer_url"
+    probe_row "npm" "$npm"
+}
+
+profile_enabled() {
+    local profile="$1" profiles item
+    profiles="$(load_env_value COMPOSE_PROFILES)"
+    IFS=',' read -r -a _profiles <<< "$profiles"
+    for item in "${_profiles[@]:-}"; do
+        [[ "$item" == "$profile" ]] && return 0
+    done
+    return 1
+}
+
+container_status() {
+    local service="$1" profile="${2:-}" container running health
+
+    if [[ -n "$profile" ]] && ! profile_enabled "$profile"; then
+        print_row "$service" "$INFO" "not enabled"
+        return 0
+    fi
+
+    container="$(docker compose -f "$ROOT_DIR/docker-compose.yml" ps -q "$service" 2>/dev/null | head -n1)"
+    if [[ -z "$container" ]]; then
+        print_row "$service" "$WARN" "enabled but not created"
+        return 0
+    fi
+
+    running="$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null || true)"
+    health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$container" 2>/dev/null || true)"
+
+    if [[ "$running" != "true" ]]; then
+        print_row "$service" "$FAIL" "not running"
+    elif [[ -n "$health" && "$health" != "healthy" ]]; then
+        print_row "$service" "$WARN" "running · health=$health"
+    elif [[ "$health" == "healthy" ]]; then
+        print_row "$service" "$OK" "running · healthy"
+    else
+        print_row "$service" "$OK" "running"
+    fi
+}
+
+check_port_80() {
+    local owner
+    owner="$(docker ps --filter publish=80 --format '{{.Names}}' 2>/dev/null | head -n1 || true)"
+    if [[ "$owner" == "dockavel-nginx" ]]; then
+        print_row "Port 80" "$OK" "used by dockavel-nginx"
+        return 0
+    fi
+    if [[ -n "$owner" ]]; then
+        print_row "Port 80" "$WARN" "used by $owner"
+        return 0
+    fi
+
+    if command -v ss >/dev/null 2>&1 && ss -ltn 2>/dev/null | awk '{print $4}' | grep -Eq '(^|:)80$'; then
+        print_row "Port 80" "$WARN" "already in use"
+    else
+        print_row "Port 80" "$OK" "available"
+    fi
+}
+
+doctor() {
+    printf '\nDockavel Doctor\n===============\n'
+
+    printf '\nSystem\n------\n'
+    if command -v docker >/dev/null 2>&1; then
+        print_row "Docker CLI" "$OK" "$(command_version docker --version)"
+    else
+        print_row "Docker CLI" "$FAIL" "not installed"
+        return 1
+    fi
+
+    if docker info >/dev/null 2>&1; then
+        print_row "Docker daemon" "$OK" "reachable"
+    else
+        print_row "Docker daemon" "$FAIL" "not reachable"
+        return 1
+    fi
+
+    if docker compose version >/dev/null 2>&1; then
+        print_row "Docker Compose" "$OK" "$(command_version docker compose version)"
+    else
+        print_row "Docker Compose" "$FAIL" "Compose v2 unavailable"
+    fi
+
+    if grep -qi microsoft /proc/version 2>/dev/null; then
+        print_row "WSL" "$OK" "detected"
+    else
+        print_row "WSL" "$INFO" "not detected"
+    fi
+
+    if [[ -f "$ENV_FILE" ]]; then
+        print_row ".env" "$OK" "found"
+    else
+        print_row ".env" "$WARN" "missing; using .env.example defaults"
+    fi
+
+    check_port_80
+    source_test
+
+    printf '\nStack\n-----\n'
+    container_status nginx
+    container_status php82 php82
+    container_status php83 php83
+    container_status php84 php84
+    container_status php85 php85
+    container_status mysql mysql
+    container_status postgres postgres
+    container_status redis redis
+    container_status node node
+    container_status phpmyadmin mysql-ui
+    container_status pgadmin postgres-ui
+
+    printf '\nNotes\n-----\n'
+    printf '%s Doctor is read-only: it does not change .env, Docker, DNS, mirrors or containers.\n' "$INFO"
+    printf '%s Network failures reported here should be investigated before rebuilding the stack.\n' "$INFO"
+    printf '%s If a source reports "IPv4 works", the default/IPv6 route is likely broken while IPv4 is usable.\n' "$INFO"
+}
+
+main() {
+    local command="${1:-help}"
+    case "$command" in
+        doctor)
+            doctor
+            ;;
+        source:test|source-test)
+            source_test
+            ;;
+        help|-h|--help)
+            print_help
+            ;;
+        *)
+            printf 'Unknown command: %s\n\n' "$command" >&2
+            print_help >&2
+            return 2
+            ;;
+    esac
+}
+
+main "$@"
