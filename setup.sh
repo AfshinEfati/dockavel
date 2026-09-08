@@ -33,9 +33,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 sync_env_defaults() {
-    local line
-    local key
-    local added=0
+    local line key added=0
 
     while IFS= read -r line || [[ -n "$line" ]]; do
         if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
@@ -56,10 +54,7 @@ sync_env_defaults() {
 }
 
 set_env_value() {
-    local key="$1"
-    local value="$2"
-    local tmp
-
+    local key="$1" value="$2" tmp
     tmp="$(mktemp)"
 
     awk -v key="$key" -v value="$value" '
@@ -71,9 +66,7 @@ set_env_value() {
         }
         { print }
         END {
-            if (!updated) {
-                print key "=" value
-            }
+            if (!updated) print key "=" value
         }
     ' "$ENV_FILE" > "$tmp"
 
@@ -86,13 +79,10 @@ get_env_value() {
 }
 
 add_profile() {
-    local profile="$1"
-    local existing
-
+    local profile="$1" existing
     for existing in "${PROFILES[@]:-}"; do
         [[ "$existing" == "$profile" ]] && return 0
     done
-
     PROFILES+=("$profile")
 }
 
@@ -103,24 +93,13 @@ restore_cursor() {
 trap restore_cursor EXIT INT TERM
 
 multiselect() {
-    local title="$1"
-    local minimum="$2"
-    local defaults_csv="$3"
+    local title="$1" minimum="$2" defaults_csv="$3"
     shift 3
 
-    local -a items=("$@")
-    local -a checked=()
-    local -a defaults=()
-    local cursor=0
-    local key=""
-    local rest=""
-    local i
-    local selected_count
-    local first_render=1
+    local -a items=("$@") checked=() defaults=()
+    local cursor=0 key="" rest="" i selected_count first_render=1
 
-    for ((i = 0; i < ${#items[@]}; i++)); do
-        checked[i]=0
-    done
+    for ((i = 0; i < ${#items[@]}; i++)); do checked[i]=0; done
 
     if [[ -n "$defaults_csv" ]]; then
         IFS=',' read -r -a defaults <<< "$defaults_csv"
@@ -144,17 +123,8 @@ multiselect() {
 
         for ((i = 0; i < ${#items[@]}; i++)); do
             printf '\033[2K\r'
-            if (( i == cursor )); then
-                printf '❯ '
-            else
-                printf '  '
-            fi
-
-            if [[ "${checked[i]}" -eq 1 ]]; then
-                printf '[x] %s\n' "${items[i]}"
-            else
-                printf '[ ] %s\n' "${items[i]}"
-            fi
+            (( i == cursor )) && printf '❯ ' || printf '  '
+            [[ "${checked[i]}" -eq 1 ]] && printf '[x] %s\n' "${items[i]}" || printf '[ ] %s\n' "${items[i]}"
         done
 
         IFS= read -rsn1 key
@@ -169,24 +139,16 @@ multiselect() {
                 ;;
             k|K) cursor=$(( (cursor - 1 + ${#items[@]}) % ${#items[@]} )) ;;
             j|J) cursor=$(( (cursor + 1) % ${#items[@]} )) ;;
-            ' ')
-                if [[ "${checked[cursor]}" -eq 1 ]]; then
-                    checked[cursor]=0
-                else
-                    checked[cursor]=1
-                fi
-                ;;
+            ' ') [[ "${checked[cursor]}" -eq 1 ]] && checked[cursor]=0 || checked[cursor]=1 ;;
             '')
                 selected_count=0
                 for ((i = 0; i < ${#items[@]}; i++)); do
                     [[ "${checked[i]}" -eq 1 ]] && selected_count=$((selected_count + 1))
                 done
-
                 if (( selected_count < minimum )); then
                     printf '\a'
                     continue
                 fi
-
                 MULTI_SELECTED=()
                 for ((i = 0; i < ${#items[@]}; i++)); do
                     [[ "${checked[i]}" -eq 1 ]] && MULTI_SELECTED+=("$i")
@@ -199,16 +161,11 @@ multiselect() {
 }
 
 choose_one() {
-    local title="$1"
-    local default_index="$2"
+    local title="$1" default_index="$2"
     shift 2
 
     local -a items=("$@")
-    local cursor="$default_index"
-    local key=""
-    local rest=""
-    local i
-    local first_render=1
+    local cursor="$default_index" key="" rest="" i first_render=1
 
     printf '\n%s\n' "$title"
     printf '%*s\n' "${#title}" '' | tr ' ' '-'
@@ -252,29 +209,20 @@ choose_one() {
 }
 
 prompt_url() {
-    local prompt="$1"
-    local current="$2"
-    local value
-
+    local prompt="$1" current="$2" value
     while true; do
         read -r -p "$prompt [$current]: " value
         value="${value:-$current}"
-
         if [[ "$value" =~ ^https?://[^[:space:]]+$ ]]; then
             PROMPT_RESULT="$value"
             return 0
         fi
-
         echo "Enter a valid http:// or https:// URL."
     done
 }
 
 prompt_registry_prefix() {
-    local prompt="$1"
-    local current="$2"
-    local allow_empty="${3:-0}"
-    local value
-
+    local prompt="$1" current="$2" allow_empty="${3:-0}" value
     while true; do
         read -r -p "$prompt [$current]: " value
         value="${value:-$current}"
@@ -295,7 +243,7 @@ prompt_registry_prefix() {
             return 0
         fi
 
-        echo "Enter a Docker image prefix without http:// or https://."
+        echo "Enter an image prefix without http:// or https://."
         [[ "$allow_empty" -eq 1 ]] && echo "Use - to clear the prefix."
     done
 }
@@ -308,16 +256,14 @@ print_header() {
 ╚══════════════════════════════════════╝
 
 Choose only the runtimes and services you actually need.
-Multiple PHP versions can run at the same time.
+Dockavel pulls prebuilt PHP/Node runtimes, so setup does not compile extensions locally.
 HEADER
 }
 
 select_download_source() {
-    local preset
-    local default_index=0
-    local current
-
+    local preset default_index=0 current
     preset="$(get_env_value DOWNLOAD_SOURCE_PRESET)"
+
     case "$preset" in
         official) default_index=0 ;;
         iran) default_index=1 ;;
@@ -336,6 +282,7 @@ select_download_source() {
         0)
             DOWNLOAD_SOURCE_PRESET="official"
             SOURCE_LABEL="Official / Global"
+            DOCKAVEL_RUNTIME_PREFIX="ghcr.io/afshinefati/"
             DOCKER_LIBRARY_PREFIX=""
             DOCKER_NAMESPACE_PREFIX=""
             GHCR_PREFIX="ghcr.io/"
@@ -348,6 +295,7 @@ select_download_source() {
         1)
             DOWNLOAD_SOURCE_PRESET="iran"
             SOURCE_LABEL="Iran / Runflare"
+            DOCKAVEL_RUNTIME_PREFIX="mirror-docker.runflare.com/afshinefati/"
             DOCKER_LIBRARY_PREFIX="mirror-docker.runflare.com/library/"
             DOCKER_NAMESPACE_PREFIX="mirror-docker.runflare.com/"
             GHCR_PREFIX="mirror-docker.runflare.com/"
@@ -360,6 +308,7 @@ select_download_source() {
         2)
             DOWNLOAD_SOURCE_PRESET="china"
             SOURCE_LABEL="China / regional mirrors"
+            DOCKAVEL_RUNTIME_PREFIX="m.daocloud.io/ghcr.io/afshinefati/"
             DOCKER_LIBRARY_PREFIX="m.daocloud.io/docker.io/library/"
             DOCKER_NAMESPACE_PREFIX="m.daocloud.io/docker.io/"
             GHCR_PREFIX="m.daocloud.io/ghcr.io/"
@@ -373,6 +322,10 @@ select_download_source() {
             DOWNLOAD_SOURCE_PRESET="custom"
             SOURCE_LABEL="Custom"
 
+            current="$(get_env_value DOCKAVEL_RUNTIME_PREFIX)"
+            prompt_registry_prefix "Dockavel runtime image prefix" "$current" 0
+            DOCKAVEL_RUNTIME_PREFIX="$PROMPT_RESULT"
+
             current="$(get_env_value DOCKER_LIBRARY_PREFIX)"
             prompt_registry_prefix "Docker Hub library prefix (- to clear)" "$current" 1
             DOCKER_LIBRARY_PREFIX="$PROMPT_RESULT"
@@ -382,7 +335,7 @@ select_download_source() {
             DOCKER_NAMESPACE_PREFIX="$PROMPT_RESULT"
 
             current="$(get_env_value GHCR_PREFIX)"
-            prompt_registry_prefix "GHCR-compatible prefix" "$current" 0
+            prompt_registry_prefix "GHCR-compatible build prefix" "$current" 0
             GHCR_PREFIX="$PROMPT_RESULT"
 
             current="$(get_env_value DEBIAN_MIRROR)"
@@ -404,15 +357,12 @@ select_download_source() {
             choose_one "npm strict SSL" 0 \
                 "Enabled (recommended)" \
                 "Disabled (only when your mirror requires it)"
-            if [[ "$CHOICE_INDEX" -eq 0 ]]; then
-                NPM_STRICT_SSL="true"
-            else
-                NPM_STRICT_SSL="false"
-            fi
+            [[ "$CHOICE_INDEX" -eq 0 ]] && NPM_STRICT_SSL="true" || NPM_STRICT_SSL="false"
             ;;
     esac
 
     set_env_value "DOWNLOAD_SOURCE_PRESET" "$DOWNLOAD_SOURCE_PRESET"
+    set_env_value "DOCKAVEL_RUNTIME_PREFIX" "$DOCKAVEL_RUNTIME_PREFIX"
     set_env_value "DOCKER_LIBRARY_PREFIX" "$DOCKER_LIBRARY_PREFIX"
     set_env_value "DOCKER_NAMESPACE_PREFIX" "$DOCKER_NAMESPACE_PREFIX"
     set_env_value "GHCR_PREFIX" "$GHCR_PREFIX"
@@ -457,9 +407,7 @@ for index in "${MULTI_SELECTED[@]}"; do
     esac
 done
 
-for profile in "${PHP_PROFILES[@]}"; do
-    add_profile "$profile"
-done
+for profile in "${PHP_PROFILES[@]}"; do add_profile "$profile"; done
 
 multiselect "Databases" 0 "0" \
     "MySQL 8" \
@@ -501,14 +449,8 @@ if [[ "${#DB_TOOL_LABELS[@]}" -gt 0 ]]; then
 
     for index in "${MULTI_SELECTED[@]}"; do
         case "${DB_TOOL_KEYS[index]}" in
-            mysql-ui)
-                PHPMYADMIN_ENABLED=1
-                add_profile "mysql-ui"
-                ;;
-            postgres-ui)
-                PGADMIN_ENABLED=1
-                add_profile "postgres-ui"
-                ;;
+            mysql-ui) PHPMYADMIN_ENABLED=1; add_profile "mysql-ui" ;;
+            postgres-ui) PGADMIN_ENABLED=1; add_profile "postgres-ui" ;;
         esac
     done
 fi
@@ -520,10 +462,8 @@ COMPOSE_PROFILES="$PROFILES_CSV" docker compose config >/dev/null
 
 printf '\nConfiguration\n-------------\n'
 printf 'Download source : %s\n' "$SOURCE_LABEL"
+printf 'Dockavel images : %s\n' "$DOCKAVEL_RUNTIME_PREFIX"
 printf 'Docker library  : %s\n' "${DOCKER_LIBRARY_PREFIX:-docker.io/library/}"
-printf 'GHCR source     : %s\n' "$GHCR_PREFIX"
-printf 'Debian          : %s\n' "$DEBIAN_MIRROR"
-printf 'Debian security : %s\n' "$DEBIAN_SECURITY_MIRROR"
 printf 'Composer        : %s\n' "$COMPOSER_REPOSITORY"
 printf 'npm             : %s\n' "$NPM_REGISTRY"
 printf 'PHP runtimes    : %s\n' "$(IFS=', '; echo "${PHP_LABELS[*]}")"
@@ -535,15 +475,16 @@ printf 'phpMyAdmin      : %s\n' "$([[ "$PHPMYADMIN_ENABLED" -eq 1 ]] && echo Yes
 printf 'pgAdmin         : %s\n' "$([[ "$PGADMIN_ENABLED" -eq 1 ]] && echo Yes || echo No)"
 printf '\nCOMPOSE_PROFILES=%s\n' "$PROFILES_CSV"
 
-choose_one "Build and start the selected stack now?" 0 \
-    "Yes, build and start" \
+choose_one "Pull and start the selected stack now?" 0 \
+    "Yes, pull and start" \
     "No, save configuration only"
 
 if [[ "$CHOICE_INDEX" -eq 0 ]]; then
-    docker compose up -d --build
+    docker compose pull
+    docker compose up -d
     echo
     docker compose ps
 else
     echo "Configuration saved to $ENV_FILE."
-    echo "Start later with: docker compose up -d --build"
+    echo "Start later with: docker compose pull && docker compose up -d"
 fi
