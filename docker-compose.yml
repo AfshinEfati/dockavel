@@ -17,6 +17,8 @@ x-php-common: &php-common
 x-php-build-args: &php-build-args
   UID: ${UID}
   GID: ${GID}
+  DOCKER_LIBRARY_PREFIX: ${DOCKER_LIBRARY_PREFIX}
+  GHCR_PREFIX: ${GHCR_PREFIX}
   DEBIAN_MIRROR: ${DEBIAN_MIRROR}
   DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR}
   COMPOSER_REPOSITORY: ${COMPOSER_REPOSITORY}
@@ -83,9 +85,11 @@ services:
       args:
         UID: ${UID}
         GID: ${GID}
+        DOCKER_LIBRARY_PREFIX: ${DOCKER_LIBRARY_PREFIX}
         DEBIAN_MIRROR: ${DEBIAN_MIRROR}
         DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR}
         NPM_REGISTRY: ${NPM_REGISTRY}
+        NPM_STRICT_SSL: ${NPM_STRICT_SSL}
     container_name: dockavel-node
     restart: unless-stopped
     init: true
@@ -101,6 +105,7 @@ services:
       HOME: /var/www
       NPM_CONFIG_REGISTRY: ${NPM_REGISTRY}
       npm_config_registry: ${NPM_REGISTRY}
+      NPM_CONFIG_STRICT_SSL: ${NPM_STRICT_SSL}
       NPM_CONFIG_CACHE: /var/www/.npm-cache
       NPM_CONFIG_FETCH_RETRIES: "20"
       NPM_CONFIG_FETCH_RETRY_FACTOR: "2"
@@ -119,7 +124,7 @@ services:
   redis:
     profiles:
       - redis
-    image: redis:7-alpine
+    image: ${DOCKER_LIBRARY_PREFIX}redis:7-alpine
     container_name: dockavel-redis
     restart: unless-stopped
     ports:
@@ -130,7 +135,7 @@ services:
   mysql:
     profiles:
       - mysql
-    image: mysql:8.0
+    image: ${DOCKER_LIBRARY_PREFIX}mysql:8.0
     container_name: dockavel-mysql
     restart: unless-stopped
     environment:
@@ -148,7 +153,7 @@ services:
   postgres:
     profiles:
       - postgres
-    image: postgres:17-alpine
+    image: ${DOCKER_LIBRARY_PREFIX}postgres:17-alpine
     container_name: dockavel-postgres
     restart: unless-stopped
     environment:
@@ -165,7 +170,7 @@ services:
   phpmyadmin:
     profiles:
       - mysql-ui
-    image: phpmyadmin/phpmyadmin
+    image: ${DOCKER_NAMESPACE_PREFIX}phpmyadmin/phpmyadmin
     container_name: dockavel-phpmyadmin
     restart: unless-stopped
     environment:
@@ -181,7 +186,7 @@ services:
   pgadmin:
     profiles:
       - postgres-ui
-    image: dpage/pgadmin4:9
+    image: ${DOCKER_NAMESPACE_PREFIX}dpage/pgadmin4:9
     container_name: dockavel-pgadmin
     restart: unless-stopped
     environment:
@@ -197,7 +202,7 @@ services:
       - dev
 
   nginx:
-    image: nginx:alpine
+    image: ${DOCKER_LIBRARY_PREFIX}nginx:alpine
     container_name: dockavel-nginx
     restart: unless-stopped
     ports:
