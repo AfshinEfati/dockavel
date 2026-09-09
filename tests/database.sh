@@ -76,7 +76,12 @@ run_cli() {
     (cd "$TEST_ROOT" && DOCKAVEL_TEST_LOG="$LOG_FILE" PATH="$TEST_ROOT/bin:$PATH" ./dockavel "$@")
 }
 
-run_cli db:status api | grep -Fq 'api_test'
+status_output="$(run_cli db:status api)"
+if ! grep -Fq 'api_test' <<< "$status_output"; then
+    printf 'Database status did not include the configured database name.\n%s\n' "$status_output" >&2
+    exit 1
+fi
+
 run_cli db:export api "$TEST_ROOT/backup.sql" >/dev/null
 grep -Fq -- '-- dockavel test dump' "$TEST_ROOT/backup.sql"
 
