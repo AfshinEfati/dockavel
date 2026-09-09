@@ -306,19 +306,41 @@ doctor() {
     container_status phpmyadmin mysql-ui
     container_status pgadmin postgres-ui
 
+    if declare -F doctor_project_checks >/dev/null 2>&1; then
+        doctor_project_checks
+    fi
+
     printf '\nNotes\n-----\n'
     printf '%s Doctor is read-only: it does not change .env, Docker, DNS, mirrors or containers.\n' "$INFO"
     printf '%s Network failures reported here should be investigated before rebuilding the stack.\n' "$INFO"
     printf '%s If a source reports "IPv4 works", the default/IPv6 route is likely broken while IPv4 is usable.\n' "$INFO"
 }
 
+dockavel_version() {
+    local version="unknown"
+    [[ -f "$ROOT_DIR/VERSION" ]] && version="$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")"
+    printf 'Dockavel %s\n' "$version"
+}
+
 # Project management is kept in a separate shell module so the main CLI stays small.
 # shellcheck source=lib/project-manager.sh
 source "$ROOT_DIR/lib/project-manager.sh"
 
+# Read-only detection enriches project:add without making hidden decisions.
+# shellcheck source=lib/project-detection.sh
+source "$ROOT_DIR/lib/project-detection.sh"
+
 # Project-aware runtime commands reuse registered project metadata.
 # shellcheck source=lib/project-commands.sh
 source "$ROOT_DIR/lib/project-commands.sh"
+
+# Database helpers operate on project metadata and the existing shared DB services.
+# shellcheck source=lib/database.sh
+source "$ROOT_DIR/lib/database.sh"
+
+# Project health checks extend Doctor without mutating the environment.
+# shellcheck source=lib/project-health.sh
+source "$ROOT_DIR/lib/project-health.sh"
 
 # Global command installation and short aliases are isolated from runtime logic.
 # shellcheck source=lib/shortcuts.sh
@@ -360,6 +382,12 @@ main() {
         project:remove|project-remove)
             project_remove "${1:-}"
             ;;
+        project:detect|project-detect)
+            project_detect_command "${1:-}"
+            ;;
+        project:check|project-check)
+            project_check "${1:-}"
+            ;;
         shell)
             project_shell "$@"
             ;;
@@ -371,6 +399,21 @@ main() {
             ;;
         npm)
             project_npm "$@"
+            ;;
+        db:status|db-status)
+            project_db_status "$@"
+            ;;
+        db:create|db-create)
+            project_db_create "$@"
+            ;;
+        db:export|db-export)
+            project_db_export "$@"
+            ;;
+        db:import|db-import)
+            project_db_import "$@"
+            ;;
+        version|-v|--version)
+            dockavel_version
             ;;
         shortcuts:install|shortcuts-install)
             shortcuts_install

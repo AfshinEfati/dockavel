@@ -4,57 +4,48 @@
 
 **English** | [فارسی](README.fa.md)
 
-[Website](https://afshinefati.github.io/dockavel-site/) · [Documentation](https://afshinefati.github.io/dockavel-site/docs/) · [Contributing](CONTRIBUTING.md)
+[Website](https://afshinefati.github.io/dockavel-site/) · [Documentation](https://afshinefati.github.io/dockavel-site/docs/) · [Smart Workflows](https://afshinefati.github.io/dockavel-site/docs/workflows/) · [Contributing](CONTRIBUTING.md)
 
-Dockavel is a lightweight, configurable local development environment for running multiple **Laravel and Node.js projects** on one shared Docker Compose stack.
+Dockavel is a lightweight multi-project local development environment for **Laravel and Node.js**. It keeps one shared Docker Compose stack, supports multiple PHP runtimes at the same time, routes each project through Nginx, and provides project-aware commands so day-to-day development does not require memorizing Docker commands.
 
-It is designed for developers who maintain projects with different PHP versions, databases, local domains, and network constraints. Dockavel keeps the core small: enable only what you need, manage projects through a simple CLI, and avoid turning local development into a large configuration project of its own.
+The core stays intentionally small: useful automation, explicit configuration, and no hidden infrastructure behavior.
 
-## Why Dockavel?
+## Current status
 
-A normal one-project Compose file works well until you have several projects that need different PHP versions, databases, Node runtimes, or local domains. Dockavel provides one shared environment instead of duplicating the same infrastructure per project.
+Current development version:
 
-Typical use cases:
+```bash
+dockavel version
+# or
+dv
+```
 
-- Laravel projects that require different PHP versions
-- Several local domains behind one Nginx instance
-- Projects that share MySQL, PostgreSQL, Redis, or Node.js
-- Development environments where direct access to global registries is unreliable
-- Teams that want a repeatable local stack without a huge configuration surface
+```text
+0.1.0-dev
+```
 
-## Design Principles
+`VERSION` and `CHANGELOG.md` are now part of the repository. A public GitHub release/tag is intentionally separate from this development version.
 
-Dockavel intentionally stays opinionated and small.
+## Core features
 
-A feature belongs in the core when it does at least one of these:
-
-1. speeds up project setup,
-2. simplifies multi-project management,
-3. reduces local-environment errors and debugging.
-
-The goal is useful automation without becoming a large all-purpose stack.
-
-## Features
-
-- Multiple simultaneous PHP-FPM runtimes: **PHP 8.2, 8.3, 8.4, and 8.5**
-- MySQL 8 and PostgreSQL 17 as optional database services
-- Redis 7 as an optional shared service
-- Node.js 24 as an optional shared runtime
-- phpMyAdmin and pgAdmin as optional database UIs
-- Docker Compose profiles so unused services stay disabled
-- Interactive installer: `./setup.sh`
-- Optional global CLI and terminal shortcuts such as `dockavel help`, `ds my-api`, `da my-api migrate`, and `dpl`
-- Regional download-source presets for Docker images and package repositories
-- Official/Global, IranServer, Runflare, China, and fully custom source configuration
-- No hidden regional-registry fallback by design
-- Nginx routing per project and per runtime
-- Shared `projects/` directory across runtimes
-- Project manager CLI: add, list, edit, and remove registration
-- Project-aware `shell`, `artisan`, `composer`, and `npm` commands
-- Read-only environment diagnostics with `dockavel doctor` or `ddoc`
-- Read-only source connectivity checks with `dockavel source:test` or `dsrc`
-- CI validation for Compose profiles, runtimes, shell scripts, project-command routing, and shortcut installation
-- No private or Dockavel-specific registry images are required
+- PHP-FPM **8.2, 8.3, 8.4 and 8.5** can run side by side
+- MySQL 8 and PostgreSQL 17
+- Redis 7
+- Node.js 24
+- phpMyAdmin and pgAdmin
+- Compose profiles so unused services stay disabled
+- one shared `projects/` workspace
+- Nginx routing per project/runtime
+- explicit Official, IranServer, Runflare, China and Custom download-source presets
+- project registration with `.dockavel.yml`
+- project-aware shell / Artisan / Composer / npm commands
+- global `dockavel` command and terminal shortcuts
+- smart project detection with explicit suggestions
+- project health checks
+- safe MySQL/PostgreSQL helpers for status/create/export/import
+- read-only Doctor and source diagnostics
+- CI coverage for runtimes, Compose, CLI routing, detection, database helpers and shortcuts
+- no private Dockavel registry images required
 
 ## Architecture
 
@@ -70,16 +61,10 @@ Browser
    └── frontend.local ──► node:3000
 
 Shared services
-   │
-   ├── MySQL 8       (optional)
-   ├── PostgreSQL 17 (optional)
-   ├── Redis 7       (optional)
-   └── Node.js 24    (optional)
-
-Database tools
-   │
-   ├── phpMyAdmin    (optional)
-   └── pgAdmin       (optional)
+   ├── MySQL 8
+   ├── PostgreSQL 17
+   ├── Redis 7
+   └── Node.js 24
 ```
 
 All application runtimes mount:
@@ -88,7 +73,7 @@ All application runtimes mount:
 ./projects → /var/www
 ```
 
-## Supported Stack
+## Supported stack
 
 | Component | Version / Type | Compose profile |
 | --- | --- | --- |
@@ -104,28 +89,23 @@ All application runtimes mount:
 | pgAdmin | 9 | `postgres-ui` |
 | Nginx | Alpine | always enabled |
 
-PHP runtimes are built locally from public `serversideup/php:<version>-fpm` images through the selected Docker namespace/mirror. Node.js is built locally from the public `node:24-bookworm-slim` image through the selected Docker library mirror.
+PHP runtimes are built locally from public `serversideup/php:<version>-fpm` images through the selected Docker namespace/mirror. Node.js is built locally from `node:24-bookworm-slim` through the selected Docker library mirror.
 
-Dockavel does **not** require a Docker Hub account, GHCR account, or private Dockavel registry just to run the stack.
+Dockavel does **not** require a Docker Hub account, GHCR account, or private Dockavel registry to run the stack.
 
 ## Requirements
 
 - Docker Engine or Docker Desktop
 - Docker Compose v2 (`docker compose`)
 - Bash
-- An interactive terminal
-- Port `80` available for Nginx
+- an interactive terminal
+- port `80` available for Nginx
 
-On Windows, using Dockavel inside **WSL2** is recommended.
+On Windows, WSL2 is recommended.
 
-Check Docker:
+## Current setup entry point
 
-```bash
-docker --version
-docker compose version
-```
-
-## Quick Start
+The current setup script remains:
 
 ```bash
 git clone https://github.com/AfshinEfati/dockavel.git
@@ -134,312 +114,86 @@ chmod +x setup.sh dockavel
 ./setup.sh
 ```
 
-The installer creates `.env` from `.env.example` on the first run and lets you select:
+It manages the current source preset, enabled profiles and optional shortcut installation. The installer UX is intentionally treated as a separate concern from the runtime architecture, so future installer work can evolve without changing the stack model.
 
-1. download source,
-2. PHP runtimes,
-3. databases,
-4. optional services,
-5. database tools,
-6. whether to install the global `dockavel` command and shortcuts,
-7. whether to build/start immediately.
+Normal incremental changes do not require deleting persistent volumes.
 
-Use `↑` / `↓` to move, `Space` to toggle selections, and `Enter` to confirm.
+## Global CLI and shortcuts
 
-Example:
-
-```text
-Download source
-[x] Iran / IranServer
-
-PHP runtimes
-[x] PHP 8.2
-[ ] PHP 8.3
-[ ] PHP 8.4
-[x] PHP 8.5
-
-Databases
-[x] MySQL 8
-[x] PostgreSQL 17
-
-Optional services
-[x] Redis 7
-[x] Node.js 24
-
-Database tools
-[x] phpMyAdmin
-[ ] pgAdmin
-```
-
-The resulting `.env` may contain:
-
-```env
-COMPOSE_PROFILES=php82,php85,mysql,postgres,redis,node,mysql-ui
-```
-
-When you choose **Build and start**, setup runs the equivalent of:
-
-```bash
-docker compose pull --ignore-buildable
-docker compose up -d --build
-```
-
-`--ignore-buildable` prevents Compose from trying to pull the locally built PHP and Node services as if they were prebuilt Dockavel images.
-
-## Global CLI and Shortcuts
-
-During setup, Dockavel can install a global `dockavel` command plus short terminal commands in `~/.local/bin`. You can also install them later:
+Install the global CLI and managed shortcuts once:
 
 ```bash
 ./dockavel shortcuts:install
 ```
 
-After reloading the shell when prompted, the CLI can be used from any directory:
+Then use Dockavel from any directory:
 
 ```bash
 dockavel help
-dockavel project:list
-```
-
-Daily shortcuts:
-
-```text
-ds <project>             → dockavel shell <project>
-da <project> ...         → dockavel artisan <project> ...
-dco <project> ...        → dockavel composer <project> ...
-dn <project> ...         → dockavel npm <project> ...
-dpa                      → dockavel project:add
-dpl                      → dockavel project:list
-dpe <project>            → dockavel project:edit <project>
-dpr <project>            → dockavel project:remove <project>
-ddoc                     → dockavel doctor
-dsrc                     → dockavel source:test
-dh [command]             → dockavel help [command]
-```
-
-Examples:
-
-```bash
-ds my-api
-da my-api migrate
-dco my-api install
-dn frontend run dev
 dpl
-dh artisan
+ds my-api
 ```
 
-`ddoc` is intentionally used instead of `dd` because `dd` is a standard Unix command.
+Current shortcuts:
 
-Dockavel never overwrites an existing command or file with the same shortcut name. Shortcut installation is idempotent. If `~/.local/bin` is not already in `PATH`, Dockavel adds one managed PATH block to Bash or Zsh startup configuration and prints the reload command.
+```text
+ds <project>                    dockavel shell <project>
+da <project> <args...>          dockavel artisan <project> <args...>
+dco <project> <args...>         dockavel composer <project> <args...>
+dn <project> <args...>          dockavel npm <project> <args...>
 
-Manage shortcut installation with:
+dpa                             dockavel project:add
+dpl                             dockavel project:list
+dpe <project>                   dockavel project:edit <project>
+dpr <project>                   dockavel project:remove <project>
+dpd <directory>                 dockavel project:detect <directory>
+dpc <project>                   dockavel project:check <project>
 
-```bash
-dockavel shortcuts:list
-dockavel shortcuts:install
-dockavel shortcuts:remove
+dbs <project>                   dockavel db:status <project>
+dbc <project>                   dockavel db:create <project>
+dbx <project> [file.sql]        dockavel db:export <project> [file.sql]
+dbi <project> <file.sql>        dockavel db:import <project> <file.sql>
+
+ddoc                            dockavel doctor
+dsrc                            dockavel source:test
+dv                              dockavel version
+dh [command]                    dockavel help [command]
 ```
 
-`shortcuts:remove` removes only Dockavel-managed symlinks. It leaves the `~/.local/bin` PATH entry untouched because that directory may contain other user commands.
+Dockavel never overwrites an existing command or file with the same shortcut name. Managed symlinks live in `~/.local/bin`.
 
-Full terminal help:
+Full help:
 
 ```bash
-dockavel help
-dockavel help shell
 dh
-dh composer
+dh shell
+dh project:detect
+dh project:check
+dh database
 ```
 
-Before shortcut installation, all commands continue to work through `./dockavel`.
-
-## Download Source Presets
-
-Dockavel keeps Docker image sources and package repositories together as one preset. Selecting a regional preset does not intentionally fall back to another hidden registry.
-
-### Official / Global
-
-```text
-Docker images : docker.io
-Debian        : deb.debian.org
-Composer      : repo.packagist.org
-npm           : registry.npmjs.org
-```
-
-### Iran / IranServer
-
-```text
-Docker library   : docker.iranserver.com/library/
-Docker namespace : docker.iranserver.com/
-Debian            : mirror.iranserver.com
-Composer          : composer.iranserver.com
-npm               : npm.iranserver.com
-```
-
-Example base images through the selected mirror:
-
-```text
-docker.iranserver.com/serversideup/php:8.5-fpm
-docker.iranserver.com/library/node:24-bookworm-slim
-```
-
-### Iran / Runflare
-
-Uses Runflare Docker, Debian, Composer, and npm mirrors. Availability and request quotas are controlled by Runflare and may change over time.
-
-### China / regional mirrors
-
-Uses DaoCloud for Docker images, Tsinghua mirrors for Debian, Aliyun for Composer, and npmmirror for npm.
-
-### Custom endpoints
-
-You can provide your own:
-
-- Docker library prefix
-- Docker namespace prefix
-- Debian mirror
-- Debian security mirror
-- Composer repository
-- npm registry
-- npm strict-SSL setting
-
-These values are stored in `.env`.
-
-## Doctor: Environment Diagnostics
-
-Run:
-
-```bash
-dockavel doctor
-```
-
-Doctor is **read-only**. It does not change `.env`, Docker settings, DNS, mirrors, containers, or the hosts file.
-
-It currently checks:
-
-- Docker CLI
-- Docker daemon
-- Docker Compose
-- WSL detection
-- `.env` availability
-- port 80 ownership
-- selected download-source preset
-- Docker registry reachability
-- Debian mirror reachability
-- Debian security mirror reachability
-- Composer repository reachability
-- npm registry reachability
-- HTTP response status, response time, and remote IP
-- enabled/running stack services
-- container health when a healthcheck is available
-
-Example:
-
-```text
-Dockavel Doctor
-===============
-
-System
-------
-Docker CLI               ✅ Docker version ...
-Docker daemon            ✅ reachable
-Docker Compose           ✅ Docker Compose version ...
-WSL                      ✅ detected
-Port 80                  ✅ used by dockavel-nginx
-
-Download source
----------------
-Selected preset          ℹ️  iranserver
-Docker registry          ✅ HTTP 401 · 0.37s · 185.x.x.x
-Composer                 ✅ HTTP 200 · 0.34s · 185.x.x.x
-npm                      ✅ HTTP 200 · 0.44s · 185.x.x.x
-```
-
-`HTTP 401` from a Docker registry `/v2/` endpoint is treated as reachable because authentication may be expected there.
-
-Doctor also performs a read-only IPv4 retry when the default route fails, which helps identify broken IPv6/default routing without changing system networking.
-
-## Testing the Current Download Source
-
-Run:
-
-```bash
-dockavel source:test
-```
-
-This checks the endpoints currently configured in `.env` without changing the selected preset.
-
-It is especially useful before a large pull/build on restricted or unstable networks.
-
-## Incrementally Changing the Stack
-
-You do not need to delete the stack just to add another optional service.
-
-Re-run:
-
-```bash
-./setup.sh
-```
-
-Keep existing selections and add the new service. Compose reuses existing images, build cache, volumes, and unchanged containers whenever possible.
-
-Persistent database volumes are not removed by running setup again.
-
-## Project Layout
-
-```text
-Dockavel/
-├── projects/
-│   ├── legacy-crm/
-│   │   └── .dockavel.yml
-│   ├── booking-api/
-│   │   └── .dockavel.yml
-│   └── frontend/
-│       └── .dockavel.yml
-├── lib/
-│   ├── help.sh
-│   ├── project-manager.sh
-│   ├── project-commands.sh
-│   └── shortcuts.sh
-├── nginx/
-│   ├── conf.d/
-│   ├── template-laravel.conf.example
-│   └── template-node.conf.example
-├── Dockerfile
-├── Dockerfile-node
-├── docker-compose.yml
-├── dockavel
-├── setup.sh
-└── .env
-```
-
-Local projects, generated Nginx configs, `.dockavel.yml` files inside local projects, and `.env` are machine-specific and are not intended to be committed to the Dockavel repository.
+`ddoc` is used instead of `dd` because `dd` is a standard Unix command.
 
 ## Project Manager
 
-Project Manager registers an **existing** project inside `projects/`. It does not create a Laravel or Node application for you.
-
-### Add a project
+Project Manager registers an **existing** project under `projects/`; it does not create a Laravel or Node application.
 
 ```bash
-dockavel project:add
-# or: dpa
+dpa
 ```
 
-The command:
+Project registration handles:
 
-- detects Laravel from `artisan` + `composer.json`
-- detects Node.js from `package.json`
-- asks for project name and local domain
-- only offers PHP runtimes already enabled in the current stack
-- only offers MySQL/PostgreSQL when those services are enabled
-- asks whether to use Redis/Node when available
-- generates project metadata
-- generates Nginx configuration from the existing templates
-- validates Nginx before applying the new registration
-- reloads Nginx when it is running
-- rolls generated files back if Nginx validation/application fails
-- prints the required hosts-file entry instead of modifying the host machine automatically
+- Laravel/Node detection
+- project name and local domain
+- PHP runtime selection for Laravel
+- MySQL/PostgreSQL selection when enabled
+- Redis and shared Node flags
+- `.dockavel.yml` generation
+- Nginx generation and validation
+- Nginx reload when running
+- rollback when generated configuration cannot be applied
+- hosts-file guidance without editing the host OS automatically
 
 Example metadata:
 
@@ -455,322 +209,182 @@ redis: true
 node: true
 ```
 
-For a Node.js project, metadata uses the selected internal application port instead of a PHP version.
-
-### List projects
+Other Project Manager commands:
 
 ```bash
 dpl
-# or: dockavel project:list
-```
-
-Example:
-
-```text
-NAME                 TYPE       DOMAIN                       RUNTIME        DATABASE
-my-api               laravel    my-api.local                 PHP 8.5        postgres
-frontend             node       frontend.local               Node :3000     none
-```
-
-### Edit a project
-
-Interactive selection:
-
-```bash
-dockavel project:edit
-```
-
-Direct selection by project name:
-
-```bash
 dpe my-api
-```
-
-Editable settings include:
-
-- project name
-- local domain
-- PHP runtime for Laravel projects
-- database
-- Redis usage
-- shared Node runtime usage
-- Node application port for Node.js projects
-
-Project path and detected project type stay fixed during edit.
-
-Edits regenerate metadata/Nginx configuration and use rollback if validation or reload fails.
-
-### Remove a project registration
-
-Interactive:
-
-```bash
-dockavel project:remove
-```
-
-Direct:
-
-```bash
 dpr my-api
 ```
 
-`project:remove` removes Dockavel registration only:
+`project:remove` removes Dockavel registration only. It never deletes project source files.
 
-```text
-projects/my-api/.dockavel.yml
-nginx/conf.d/my-api.local.conf
+## Smart project detection
+
+Read project hints without changing anything:
+
+```bash
+dockavel project:detect my-api
+# shortcut
+dpd my-api
 ```
 
-It **never deletes the project source directory**.
+Detection inspects project files such as:
 
-The command validates/reloads Nginx and restores removed Dockavel files if applying the change fails.
+- `artisan`
+- `composer.json`
+- `package.json`
+- npm/yarn/pnpm/bun lockfiles
+- `.env` or `.env.example`
 
-## Project-aware Commands
+It can report:
 
-Once a project is registered, Dockavel can route common development commands through that project's metadata.
+- Laravel or Node.js project type
+- PHP requirement from `composer.json`
+- the first compatible **enabled** PHP runtime suggestion
+- npm / yarn / pnpm / bun hint
+- MySQL / PostgreSQL / SQLite hint
+- Redis usage hint
+- whether Node frontend files are present
+
+Detection is intentionally advisory. `project:add` still asks before writing metadata or selecting a runtime/service.
+
+## Project-aware runtime commands
+
+Once registered, Dockavel resolves the project runtime and `/var/www/<project>` working directory automatically.
 
 ```bash
 ds my-api
 da my-api migrate
 dco my-api install
-dn frontend install
+dn my-api run dev
 ```
 
-### `shell`
+For Laravel projects, `shell`, Artisan and Composer use the PHP runtime stored in `.dockavel.yml`. Node projects use the shared Node runtime. `npm` is available for Node projects and Laravel projects with `node: true`.
 
-For Laravel projects, `shell` opens Bash in the PHP runtime stored in `.dockavel.yml`. For Node projects it opens the shared Node runtime.
+Before execution Dockavel validates that the runtime is enabled/running, the host project path exists, and the project is visible inside the container.
+
+## Project health check
+
+Check one registered project without changing it:
 
 ```bash
-ds legacy-api   # php82 if metadata says php: "8.2"
-ds my-api       # php85 if metadata says php: "8.5"
-ds frontend     # node for a Node project
+dockavel project:check my-api
+# shortcut
+dpc my-api
 ```
 
-### `artisan`
+The health check covers:
 
-Runs `php artisan` in the project's configured PHP runtime and working directory:
+- metadata core fields
+- host project path
+- Laravel/Node project markers
+- configured PHP/Node runtime state
+- runtime bind-mount visibility
+- generated Nginx config and `server_name`
+- `nginx -t` when Nginx is running
+- configured database presence
+- optional Redis state
+- optional frontend Node state
+
+Warnings are separated from hard failures.
+
+## Database helpers
+
+Database helpers are project-aware. They use the database type from `.dockavel.yml` and `DB_DATABASE` from the project's `.env` or `.env.example`.
+
+Check database status:
 
 ```bash
-da my-api migrate
-da my-api queue:work
-da my-api route:list
+dbs my-api
 ```
 
-### `composer`
-
-Runs Composer in the same project-aware PHP runtime:
+Create it if missing:
 
 ```bash
-dco my-api install
-dco my-api update
-dco my-api require vendor/package
+dbc my-api
 ```
 
-### `npm`
-
-Runs npm in the shared Node runtime. It works for Node projects and Laravel projects with `node: true` in their metadata.
+Export:
 
 ```bash
-dn my-api install
-dn my-api run build
-dn frontend run dev
+dbx my-api
+# or
+dbx my-api backups/my-api.sql
 ```
 
-Before running a project-aware command, Dockavel validates that the selected runtime is enabled and running, the project still exists on the host, and the project directory is visible inside the runtime. If Docker Desktop has a stale `projects/` bind mount, the command stops before executing the requested tool and reports the visibility problem.
+An export refuses to overwrite an existing file.
 
-Arguments after the project selector are passed directly to the underlying command instead of being wrapped in an extra shell.
-
-## Hosts File
-
-Dockavel intentionally does not edit the host machine's hosts file automatically.
-
-After project registration, add the printed entry manually, for example:
-
-```text
-127.0.0.1 my-api.local
-```
-
-On Windows the hosts file is:
-
-```text
-C:\Windows\System32\drivers\etc\hosts
-```
-
-You normally need administrator privileges to save it.
-
-## Running Multiple PHP Versions
-
-Example:
-
-```text
-projects/
-├── old-app/       # PHP 8.2
-├── internal-api/  # PHP 8.4
-└── new-app/       # PHP 8.5
-```
-
-Nginx can route each project to its selected FPM service:
-
-```text
-php82:9000
-php84:9000
-php85:9000
-```
-
-All enabled runtimes can stay active at the same time.
-
-## PHP and Composer Commands
-
-For registered projects, the short project-aware commands are the normal path after shortcut installation:
+Import:
 
 ```bash
-ds my-api
-da my-api migrate
-dco my-api install
+dbi my-api backups/my-api.sql
 ```
 
-Low-level runtime commands are still available when needed:
+Import requires explicit confirmation because SQL imports can modify or delete existing data.
+
+The helper layer currently supports MySQL and PostgreSQL. Dockavel intentionally does not provide automatic `drop`/`reset` commands here.
+
+## Doctor and source diagnostics
+
+Run:
 
 ```bash
-docker compose exec php82 php -v
-docker compose exec php85 php -v
-docker compose exec php85 bash
+ddoc
 ```
 
-Note the naming difference:
+Doctor is read-only. It checks the local Docker/WSL environment, configured sources and enabled stack services. It also reports project-registry and proxy hints, including:
 
-```text
-Compose service : php85
-Container name  : dockavel-php85
-Local image     : dev-stack-php85
-```
+- registered/stale project paths
+- shell `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` variables
+- a Docker client `proxies` block in `~/.docker/config.json`
 
-For low-level Compose usage, prefer the Compose service name rather than the container name.
+Doctor does not change proxy settings, DNS, Docker Desktop configuration, `.env`, mirrors or containers.
 
-## Node.js Projects
-
-For registered Node projects or Laravel projects with Node enabled:
+Source-only checks:
 
 ```bash
-dn frontend install
-dn frontend run dev
-ds frontend
+dsrc
 ```
 
-Low-level shared runtime checks are still available:
+Source tests cover the configured Docker registry, Debian mirrors, Composer repository and npm registry, including HTTP status, response time, remote IP and an IPv4 retry hint when the default route fails.
 
-```bash
-docker compose exec node node --version
-docker compose exec node npm --version
-```
+## Download source presets
 
-Node applications registered through Project Manager use ports in the internal range `3000-3099` and are exposed through Nginx.
+Dockavel keeps image/package sources explicit. A regional preset does not intentionally fall back to a hidden global source.
 
-## MySQL
-
-Inside Docker:
+### Official / Global
 
 ```text
-mysql:3306
+Docker     docker.io
+Debian     deb.debian.org
+Composer   repo.packagist.org
+npm        registry.npmjs.org
 ```
 
-Host:
+### Iran / IranServer
 
 ```text
-127.0.0.1:13307
+Docker library     docker.iranserver.com/library/
+Docker namespace   docker.iranserver.com/
+Debian              mirror.iranserver.com
+Composer            composer.iranserver.com
+npm                 npm.iranserver.com
 ```
 
-Laravel example:
+### Iran / Runflare
 
-```env
-DB_CONNECTION=mysql
-DB_HOST=mysql
-DB_PORT=3306
-DB_DATABASE=laravel
-DB_USERNAME=laravel
-DB_PASSWORD=secret
-```
+Uses the configured Runflare Docker, Debian, Composer and npm mirror endpoints.
 
-Persistent volume: `mysql_data`.
+### China
 
-## PostgreSQL
+Uses regional Docker, Debian, Composer and npm endpoints configured by the China preset.
 
-Inside Docker:
+### Custom
 
-```text
-postgres:5432
-```
+Allows explicit Docker prefixes, Debian mirrors, Composer repository, npm registry and npm strict-SSL behavior.
 
-Host:
-
-```text
-127.0.0.1:15432
-```
-
-Laravel example:
-
-```env
-DB_CONNECTION=pgsql
-DB_HOST=postgres
-DB_PORT=5432
-DB_DATABASE=laravel
-DB_USERNAME=laravel
-DB_PASSWORD=secret
-```
-
-Persistent volume: `postgres_data`.
-
-## Redis
-
-Inside Docker:
-
-```text
-redis:6379
-```
-
-Host:
-
-```text
-127.0.0.1:16379
-```
-
-Laravel example:
-
-```env
-REDIS_HOST=redis
-REDIS_PORT=6379
-```
-
-## Database UIs
-
-### phpMyAdmin
-
-When `mysql-ui` is enabled:
-
-```text
-http://127.0.0.1:18080
-```
-
-Use `mysql` as the database server host.
-
-### pgAdmin
-
-When `postgres-ui` is enabled:
-
-```text
-http://127.0.0.1:18081
-```
-
-Use:
-
-```text
-Host: postgres
-Port: 5432
-```
-
-Persistent volume: `pgadmin_data`.
-
-## Default Host Ports
+## Default host ports
 
 | Service | Host | Container |
 | --- | ---: | ---: |
@@ -783,195 +397,122 @@ Persistent volume: `pgadmin_data`.
 
 Except for Nginx, published service ports are bound to `127.0.0.1` by default.
 
-## Important `.env` Values
+## Hosts file
 
-```env
-UID=1000
-GID=1000
-COMPOSE_PROFILES=php82,php85,mysql,redis,node,mysql-ui
-DOWNLOAD_SOURCE_PRESET=official
-DOCKER_LIBRARY_PREFIX=docker.io/library/
-DOCKER_NAMESPACE_PREFIX=docker.io/
-DEBIAN_MIRROR=https://deb.debian.org/debian
-DEBIAN_SECURITY_MIRROR=https://deb.debian.org/debian-security
-COMPOSER_REPOSITORY=https://repo.packagist.org
-NPM_REGISTRY=https://registry.npmjs.org/
-NPM_STRICT_SSL=true
+Dockavel does not modify the host machine hosts file automatically.
+
+Example:
+
+```text
+127.0.0.1 my-api.local
 ```
 
-Database credentials and host ports are also configurable in `.env`.
+On Windows:
 
-## Useful Commands
-
-```bash
-# Help
-dockavel help
-dh
-
-# Dockavel diagnostics
-ddoc
-dsrc
-
-# Project management
-dpa
-dpl
-dpe my-api
-dpr my-api
-
-# Project-aware runtime commands
-ds my-api
-da my-api migrate
-dco my-api install
-dn frontend install
-
-# Shortcut management
-dockavel shortcuts:list
-dockavel shortcuts:install
-dockavel shortcuts:remove
-
-# Stack status
-docker compose ps
-
-# Start / build
-docker compose up -d
-docker compose up -d --build
-
-# Stop without deleting database volumes
-docker compose down
-
-# Logs
-docker compose logs -f
-
-# Validate Compose
-docker compose config
+```text
+C:\Windows\System32\drivers\etc\hosts
 ```
 
-## Data Safety
+## Data safety
 
-Database data lives in named Docker volumes.
+Persistent database data uses named Docker volumes.
 
-A normal shutdown does not delete them:
+Safe normal shutdown:
 
 ```bash
 docker compose down
 ```
 
-This is destructive and removes persistent volumes:
+Destructive:
 
 ```bash
 docker compose down -v
 ```
 
-Use destructive cleanup only when you intentionally want a fresh database state.
+Do not use `-v` unless you intentionally want to remove persistent volumes.
 
-`project:remove` is different: it removes only Dockavel metadata/Nginx registration and never deletes the source project.
+Database import is confirmation-protected, database export never overwrites an existing target, and project removal never deletes source code.
 
-## Troubleshooting
-
-### Diagnose before rebuilding
-
-Start with:
-
-```bash
-ddoc
-```
-
-For source-only connectivity:
-
-```bash
-dsrc
-```
-
-This helps distinguish Docker/project configuration problems from DNS, TLS, timeout, mirror, or routing problems before doing expensive rebuilds.
-
-### Port 80 is already in use
-
-Doctor reports whether port 80 is available, used by `dockavel-nginx`, or occupied elsewhere.
-
-### A regional mirror cannot resolve an image
-
-Verify that the selected mirror actually provides/proxies the upstream image. Dockavel does not intentionally fall back to another registry when a regional source is selected.
-
-Re-run `./setup.sh` and explicitly choose another preset or `Custom endpoints` when needed.
-
-### Project exists on the host but is not visible in a runtime
-
-Project-aware commands verify the project path before execution. If Docker Desktop/WSL has a stale bind mount, Dockavel reports the visibility problem instead of launching Artisan, Composer, npm, or a shell in the wrong state. Restarting Docker Desktop can resolve a stale bind mount when the host path is otherwise correct.
-
-### Add a service without deleting the existing stack
-
-Re-run:
-
-```bash
-./setup.sh
-```
-
-Keep existing profiles selected and add the new service.
-
-### Validate current state
-
-```bash
-grep '^COMPOSE_PROFILES=' .env
-docker compose config
-docker compose ps -a
-dpl
-```
-
-## Local Files and Git
-
-These are intentionally local/machine-specific:
+## Repository layout
 
 ```text
-projects/*
-nginx/conf.d/*
-.env
+Dockavel/
+├── projects/
+├── lib/
+│   ├── database.sh
+│   ├── help.sh
+│   ├── project-commands.sh
+│   ├── project-detection.sh
+│   ├── project-health.sh
+│   ├── project-manager.sh
+│   └── shortcuts.sh
+├── nginx/
+├── tests/
+├── CHANGELOG.md
+├── VERSION
+├── Dockerfile
+├── Dockerfile-node
+├── docker-compose.yml
+├── dockavel
+└── setup.sh
 ```
 
-This keeps local application code, domains, credentials, and machine-specific configuration out of the Dockavel repository.
+Machine-local files such as project source, generated Nginx configs, project metadata and `.env` are not intended to be committed to the Dockavel repository.
 
 ## CI
 
 GitHub Actions currently validates:
 
-- multiple Compose profile combinations
-- PHP 8.2, 8.3, 8.4, and 8.5 builds
-- required PHP runtime capabilities
+- Compose profile combinations
+- PHP 8.2, 8.3, 8.4 and 8.5 builds and required extensions
 - Node.js 24 build/runtime
-- `setup.sh`, `dockavel`, Project Manager, Project Commands, help and shortcuts shell syntax
-- project-aware command routing with a fake Docker CLI
+- Bash syntax for the CLI modules and tests
+- smart project detection
+- project-aware command routing
+- database helper routing/safety behavior
 - global shortcut installation/removal and symlink routing
 - executable CLI entry point
 
-## Roadmap
+## Documentation
 
-Completed core foundations:
+Detailed bilingual documentation is published at:
+
+https://afshinefati.github.io/dockavel-site/docs/
+
+Important pages:
+
+- [CLI & Shortcuts](https://afshinefati.github.io/dockavel-site/docs/commands/)
+- [Smart Workflows](https://afshinefati.github.io/dockavel-site/docs/workflows/)
+- [Project Manager](https://afshinefati.github.io/dockavel-site/docs/projects/)
+- [Sources & Diagnostics](https://afshinefati.github.io/dockavel-site/docs/network/)
+- [Stack & Runtimes](https://afshinefati.github.io/dockavel-site/docs/stack/)
+- [Troubleshooting](https://afshinefati.github.io/dockavel-site/docs/troubleshooting/)
+- [Reference](https://afshinefati.github.io/dockavel-site/docs/reference/)
+
+## Completed foundation
 
 ```text
-✅ Configurable stack
-✅ Multiple PHP runtimes
-✅ Regional download sources
+✅ Configurable shared stack
+✅ PHP 8.2 / 8.3 / 8.4 / 8.5
 ✅ MySQL / PostgreSQL / Redis / Node
+✅ Regional download sources
+✅ Project Manager
+✅ Project-aware runtime commands
+✅ Global CLI / Help / terminal shortcuts
+✅ Smart project detection
+✅ Project health checks
+✅ Database helpers
 ✅ Doctor / source diagnostics
-✅ Project add / list / edit / remove
-✅ Project-aware shell / Artisan / Composer / npm
-✅ Global Dockavel CLI / help / terminal shortcuts
+✅ Version / changelog foundation
 ```
 
-Likely next productivity work:
-
-```text
-- smarter project detection and runtime suggestions
-- database helpers for repeated local workflows
-- additional Doctor / project health diagnostics
-```
-
-These remain separate features and should stay explicit rather than adding hidden automation.
+Future work remains explicit and should not silently expand the core or change runtime/source architecture.
 
 ## Contributing
 
-Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-User-facing features, services, runtimes, source presets, CLI commands, configuration changes, ports and workflows should keep the runtime README files and the public [website/documentation](https://afshinefati.github.io/dockavel-site/docs/) synchronized.
+User-facing features, services, runtimes, source presets, CLI commands, configuration changes, ports and workflows should keep `README.md`, `README.fa.md` and the public website/documentation synchronized.
 
 ## License
 

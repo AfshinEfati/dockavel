@@ -110,22 +110,36 @@ jobs:
           bash -n setup.sh
           bash -n dockavel
           bash -n lib/project-manager.sh
+          bash -n lib/project-detection.sh
           bash -n lib/project-commands.sh
+          bash -n lib/database.sh
+          bash -n lib/project-health.sh
           bash -n lib/shortcuts.sh
           bash -n lib/help.sh
           bash -n tests/project-commands.sh
+          bash -n tests/project-detection.sh
+          bash -n tests/database.sh
           bash -n tests/shortcuts.sh
           test -x dockavel
 
       - name: CLI smoke test
         run: |
           ./dockavel help >/dev/null
-          ./dockavel help shell >/dev/null
+          ./dockavel help project:detect >/dev/null
+          ./dockavel help project:check >/dev/null
+          ./dockavel help database >/dev/null
+          ./dockavel version | grep -F 'Dockavel '
           ./dockavel project:list >/dev/null
           ./dockavel shortcuts:list >/dev/null
 
+      - name: Smart project detection tests
+        run: bash tests/project-detection.sh
+
       - name: Project command routing tests
         run: bash tests/project-commands.sh
+
+      - name: Database helper tests
+        run: bash tests/database.sh
 
       - name: Global shortcut tests
         run: bash tests/shortcuts.sh

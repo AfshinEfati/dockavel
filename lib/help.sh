@@ -32,6 +32,12 @@ Projects
   dockavel project:remove [project]
       Remove Dockavel registration without deleting source code.
 
+  dockavel project:detect <directory>
+      Read project files and show type/runtime/database/service suggestions.
+
+  dockavel project:check <project>
+      Check project metadata, runtime, mount, Nginx and shared services.
+
 Project commands
 ----------------
   dockavel shell <project>
@@ -46,10 +52,24 @@ Project commands
   dockavel npm <project> [arguments...]
       Run npm in the shared Node runtime for a Node-enabled project.
 
+Database helpers
+----------------
+  dockavel db:status <project>
+      Check whether the project's configured database exists.
+
+  dockavel db:create <project>
+      Create the configured MySQL/PostgreSQL database if missing.
+
+  dockavel db:export <project> [file.sql]
+      Export the configured database without overwriting an existing file.
+
+  dockavel db:import <project> <file.sql>
+      Import SQL after an explicit confirmation prompt.
+
 Diagnostics
 -----------
   dockavel doctor
-      Diagnose Docker, WSL, ports, sources and stack health.
+      Diagnose Docker, WSL, proxy hints, project registry, sources and stack health.
 
   dockavel source:test
       Test the download endpoints configured in .env.
@@ -65,6 +85,9 @@ Global CLI / shortcuts
   dockavel shortcuts:remove
       Remove shortcuts managed by this Dockavel checkout.
 
+  dockavel version
+      Show the current Dockavel version.
+
   dockavel help [command]
       Show this help or detailed help for one command.
 
@@ -78,29 +101,38 @@ Shortcuts
   dpl                             dockavel project:list
   dpe <project>                   dockavel project:edit <project>
   dpr <project>                   dockavel project:remove <project>
+  dpd <directory>                 dockavel project:detect <directory>
+  dpc <project>                   dockavel project:check <project>
+  dbs <project>                   dockavel db:status <project>
+  dbc <project>                   dockavel db:create <project>
+  dbx <project> [file.sql]        dockavel db:export <project> [file.sql]
+  dbi <project> <file.sql>        dockavel db:import <project> <file.sql>
   ddoc                            dockavel doctor
   dsrc                            dockavel source:test
+  dv                              dockavel version
   dh [command]                    dockavel help [command]
 
 Examples
 --------
+  dpd testlara
+  dpc testlara
   ds testlara
   da testlara migrate
-  da testlara route:list
   dco testlara install
-  dn testlara run dev
+  dbs testlara
+  dbx testlara backup.sql
   dpl
   ddoc
 
 More help
 ---------
+  dockavel help project:detect
+  dockavel help project:check
+  dockavel help database
   dockavel help shell
-  dockavel help artisan
-  dockavel help composer
-  dockavel help npm
   dockavel help shortcuts
 
-Note: Dockavel intentionally uses ddoc instead of dd because dd is a standard Unix command.
+Note: smart detection only suggests values. project:add still asks before saving metadata.
 HELP
 }
 
@@ -115,10 +147,6 @@ Shell
 Usage:
   dockavel shell <project>
   ds <project>
-
-Examples:
-  ds testlara
-  dockavel shell testlara
 
 Laravel projects open in their configured PHP runtime.
 Node projects open in the shared Node runtime.
@@ -154,16 +182,11 @@ HELP
             ;;
         npm|dn)
             cat <<'HELP'
- npm
-----
+npm
+---
 Usage:
   dockavel npm <project> [arguments...]
   dn <project> [arguments...]
-
-Examples:
-  dn testlara install
-  dn testlara run dev
-  dn frontend run build
 
 The project must be a Node project or have node: true in .dockavel.yml.
 HELP
@@ -177,7 +200,7 @@ Usage:
   dpa
 
 Registers an existing project inside Dockavel's projects/ directory.
-It does not create a Laravel or Node application.
+Smart detection prints PHP, database, Redis, Node and package-manager hints first, but the command still asks before writing metadata.
 HELP
             ;;
         project:list|project-list|dpl)
@@ -198,10 +221,6 @@ Project edit
 Usage:
   dockavel project:edit [project]
   dpe [project]
-
-Examples:
-  dpe testlara
-  dockavel project:edit testlara
 HELP
             ;;
         project:remove|project-remove|dpr)
@@ -216,6 +235,58 @@ Removes Dockavel metadata and generated Nginx registration only.
 Project source files are never deleted by this command.
 HELP
             ;;
+        project:detect|project-detect|dpd)
+            cat <<'HELP'
+Project detect
+--------------
+Usage:
+  dockavel project:detect <directory>
+  dpd <directory>
+
+Example:
+  dpd testlara
+
+Read-only detection looks at composer.json, package.json/lockfiles and .env/.env.example.
+It can suggest project type, PHP runtime, database, Redis and package-manager usage.
+Suggestions never change the project automatically.
+HELP
+            ;;
+        project:check|project-check|dpc)
+            cat <<'HELP'
+Project check
+-------------
+Usage:
+  dockavel project:check <project>
+  dpc <project>
+
+Checks metadata, host path, runtime state, container mount visibility, generated Nginx config, database presence and optional Redis/Node services.
+The check is read-only.
+HELP
+            ;;
+        database|db|db:status|db:create|db:export|db:import|dbs|dbc|dbx|dbi)
+            cat <<'HELP'
+Database helpers
+----------------
+Status:
+  dockavel db:status <project>
+  dbs <project>
+
+Create if missing:
+  dockavel db:create <project>
+  dbc <project>
+
+Export:
+  dockavel db:export <project> [file.sql]
+  dbx <project> [file.sql]
+
+Import:
+  dockavel db:import <project> <file.sql>
+  dbi <project> <file.sql>
+
+The database name is read from the project's .env (or .env.example fallback).
+Export refuses to overwrite an existing file. Import requires confirmation and does not create/drop databases automatically.
+HELP
+            ;;
         doctor|ddoc)
             cat <<'HELP'
 Doctor
@@ -224,7 +295,7 @@ Usage:
   dockavel doctor
   ddoc
 
-Read-only diagnostics for Docker, WSL, port 80, download sources and stack health.
+Read-only diagnostics for Docker, WSL, port 80, download sources, stack health, registered-project staleness and host/Docker-client proxy hints.
 HELP
             ;;
         source:test|source-test|dsrc)
@@ -238,6 +309,16 @@ Usage:
 Read-only connectivity checks for the currently configured download sources.
 HELP
             ;;
+        version|dv|-v|--version)
+            cat <<'HELP'
+Version
+-------
+Usage:
+  dockavel version
+  dockavel --version
+  dv
+HELP
+            ;;
         shortcuts|shortcut|shortcuts:install|shortcuts:list|shortcuts:remove)
             cat <<'HELP'
 Global CLI and shortcuts
@@ -245,18 +326,13 @@ Global CLI and shortcuts
 Install:
   ./dockavel shortcuts:install
 
-After installation:
-  dockavel help
-  ds testlara
-  da testlara route:list
-
 Inspect:
   dockavel shortcuts:list
 
 Remove:
   dockavel shortcuts:remove
 
-Dockavel installs managed symlinks in ~/.local/bin and never overwrites an existing command or file with the same name. If ~/.local/bin is not already in PATH, Dockavel can add one managed PATH block to Bash or Zsh startup configuration.
+Dockavel installs managed symlinks in ~/.local/bin and never overwrites an existing command or file with the same name.
 HELP
             ;;
         help|dh)
@@ -268,11 +344,6 @@ Usage:
   dockavel help <command>
   dh
   dh <command>
-
-Examples:
-  dh shell
-  dh artisan
-  dockavel help shortcuts
 HELP
             ;;
         *)

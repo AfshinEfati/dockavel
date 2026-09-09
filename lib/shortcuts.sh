@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-DOCKAVEL_SHORTCUT_NAMES=(dockavel ds da dco dn dpa dpl dpe dpr ddoc dsrc dh)
+DOCKAVEL_SHORTCUT_NAMES=(dockavel ds da dco dn dpa dpl dpe dpr dpd dpc dbs dbc dbx dbi ddoc dsrc dv dh)
 
 shortcut_target_for_name() {
     case "$1" in
@@ -12,8 +12,15 @@ shortcut_target_for_name() {
         dpl) printf 'project:list' ;;
         dpe) printf 'project:edit' ;;
         dpr) printf 'project:remove' ;;
+        dpd) printf 'project:detect' ;;
+        dpc) printf 'project:check' ;;
+        dbs) printf 'db:status' ;;
+        dbc) printf 'db:create' ;;
+        dbx) printf 'db:export' ;;
+        dbi) printf 'db:import' ;;
         ddoc) printf 'doctor' ;;
         dsrc) printf 'source:test' ;;
+        dv) printf 'version' ;;
         dh) printf 'help' ;;
         *) return 1 ;;
     esac
@@ -30,8 +37,15 @@ shortcut_description_for_name() {
         dpl) printf 'List projects' ;;
         dpe) printf 'Edit project' ;;
         dpr) printf 'Remove project registration' ;;
+        dpd) printf 'Detect project requirements' ;;
+        dpc) printf 'Check project health' ;;
+        dbs) printf 'Show project database status' ;;
+        dbc) printf 'Create project database' ;;
+        dbx) printf 'Export project database' ;;
+        dbi) printf 'Import project database' ;;
         ddoc) printf 'Run Dockavel Doctor' ;;
         dsrc) printf 'Test configured download sources' ;;
+        dv) printf 'Show Dockavel version' ;;
         dh) printf 'Show Dockavel help' ;;
         *) printf 'Dockavel shortcut' ;;
     esac

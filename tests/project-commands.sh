@@ -10,8 +10,8 @@ mkdir -p "$TEST_ROOT/lib" "$TEST_ROOT/projects/api" "$TEST_ROOT/projects/fronten
 cp "$REPO_ROOT/dockavel" "$TEST_ROOT/dockavel"
 cp "$REPO_ROOT/docker-compose.yml" "$TEST_ROOT/docker-compose.yml"
 cp "$REPO_ROOT/.env.example" "$TEST_ROOT/.env.example"
-cp "$REPO_ROOT/lib/project-manager.sh" "$TEST_ROOT/lib/project-manager.sh"
-cp "$REPO_ROOT/lib/project-commands.sh" "$TEST_ROOT/lib/project-commands.sh"
+cp "$REPO_ROOT/VERSION" "$TEST_ROOT/VERSION"
+cp "$REPO_ROOT/lib/"*.sh "$TEST_ROOT/lib/"
 chmod +x "$TEST_ROOT/dockavel"
 
 cat > "$TEST_ROOT/.env" <<'ENV'
