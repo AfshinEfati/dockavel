@@ -43,6 +43,7 @@ The goal is useful automation without becoming a large all-purpose stack.
 - phpMyAdmin and pgAdmin as optional database UIs
 - Docker Compose profiles so unused services stay disabled
 - Interactive installer: `./setup.sh`
+- Optional global CLI and terminal shortcuts such as `dockavel help`, `ds my-api`, `da my-api migrate`, and `dpl`
 - Regional download-source presets for Docker images and package repositories
 - Official/Global, IranServer, Runflare, China, and fully custom source configuration
 - No hidden regional-registry fallback by design
@@ -50,9 +51,9 @@ The goal is useful automation without becoming a large all-purpose stack.
 - Shared `projects/` directory across runtimes
 - Project manager CLI: add, list, edit, and remove registration
 - Project-aware `shell`, `artisan`, `composer`, and `npm` commands
-- Read-only environment diagnostics with `./dockavel doctor`
-- Read-only source connectivity checks with `./dockavel source:test`
-- CI validation for Compose profiles, runtimes, shell scripts, and project-command routing
+- Read-only environment diagnostics with `dockavel doctor` or `ddoc`
+- Read-only source connectivity checks with `dockavel source:test` or `dsrc`
+- CI validation for Compose profiles, runtimes, shell scripts, project-command routing, and shortcut installation
 - No private or Dockavel-specific registry images are required
 
 ## Architecture
@@ -140,7 +141,8 @@ The installer creates `.env` from `.env.example` on the first run and lets you s
 3. databases,
 4. optional services,
 5. database tools,
-6. whether to build/start immediately.
+6. whether to install the global `dockavel` command and shortcuts,
+7. whether to build/start immediately.
 
 Use `↑` / `↓` to move, `Space` to toggle selections, and `Enter` to confirm.
 
@@ -183,6 +185,73 @@ docker compose up -d --build
 ```
 
 `--ignore-buildable` prevents Compose from trying to pull the locally built PHP and Node services as if they were prebuilt Dockavel images.
+
+## Global CLI and Shortcuts
+
+During setup, Dockavel can install a global `dockavel` command plus short terminal commands in `~/.local/bin`. You can also install them later:
+
+```bash
+./dockavel shortcuts:install
+```
+
+After reloading the shell when prompted, the CLI can be used from any directory:
+
+```bash
+dockavel help
+dockavel project:list
+```
+
+Daily shortcuts:
+
+```text
+ds <project>             → dockavel shell <project>
+da <project> ...         → dockavel artisan <project> ...
+dco <project> ...        → dockavel composer <project> ...
+dn <project> ...         → dockavel npm <project> ...
+dpa                      → dockavel project:add
+dpl                      → dockavel project:list
+dpe <project>            → dockavel project:edit <project>
+dpr <project>            → dockavel project:remove <project>
+ddoc                     → dockavel doctor
+dsrc                     → dockavel source:test
+dh [command]             → dockavel help [command]
+```
+
+Examples:
+
+```bash
+ds my-api
+da my-api migrate
+dco my-api install
+dn frontend run dev
+dpl
+dh artisan
+```
+
+`ddoc` is intentionally used instead of `dd` because `dd` is a standard Unix command.
+
+Dockavel never overwrites an existing command or file with the same shortcut name. Shortcut installation is idempotent. If `~/.local/bin` is not already in `PATH`, Dockavel adds one managed PATH block to Bash or Zsh startup configuration and prints the reload command.
+
+Manage shortcut installation with:
+
+```bash
+dockavel shortcuts:list
+dockavel shortcuts:install
+dockavel shortcuts:remove
+```
+
+`shortcuts:remove` removes only Dockavel-managed symlinks. It leaves the `~/.local/bin` PATH entry untouched because that directory may contain other user commands.
+
+Full terminal help:
+
+```bash
+dockavel help
+dockavel help shell
+dh
+dh composer
+```
+
+Before shortcut installation, all commands continue to work through `./dockavel`.
 
 ## Download Source Presets
 
@@ -241,7 +310,7 @@ These values are stored in `.env`.
 Run:
 
 ```bash
-./dockavel doctor
+dockavel doctor
 ```
 
 Doctor is **read-only**. It does not change `.env`, Docker settings, DNS, mirrors, containers, or the hosts file.
@@ -295,7 +364,7 @@ Doctor also performs a read-only IPv4 retry when the default route fails, which 
 Run:
 
 ```bash
-./dockavel source:test
+dockavel source:test
 ```
 
 This checks the endpoints currently configured in `.env` without changing the selected preset.
@@ -328,8 +397,10 @@ Dockavel/
 │   └── frontend/
 │       └── .dockavel.yml
 ├── lib/
+│   ├── help.sh
 │   ├── project-manager.sh
-│   └── project-commands.sh
+│   ├── project-commands.sh
+│   └── shortcuts.sh
 ├── nginx/
 │   ├── conf.d/
 │   ├── template-laravel.conf.example
@@ -351,7 +422,8 @@ Project Manager registers an **existing** project inside `projects/`. It does no
 ### Add a project
 
 ```bash
-./dockavel project:add
+dockavel project:add
+# or: dpa
 ```
 
 The command:
@@ -388,7 +460,8 @@ For a Node.js project, metadata uses the selected internal application port inst
 ### List projects
 
 ```bash
-./dockavel project:list
+dpl
+# or: dockavel project:list
 ```
 
 Example:
@@ -404,13 +477,13 @@ frontend             node       frontend.local               Node :3000     none
 Interactive selection:
 
 ```bash
-./dockavel project:edit
+dockavel project:edit
 ```
 
 Direct selection by project name:
 
 ```bash
-./dockavel project:edit my-api
+dpe my-api
 ```
 
 Editable settings include:
@@ -432,13 +505,13 @@ Edits regenerate metadata/Nginx configuration and use rollback if validation or 
 Interactive:
 
 ```bash
-./dockavel project:remove
+dockavel project:remove
 ```
 
 Direct:
 
 ```bash
-./dockavel project:remove my-api
+dpr my-api
 ```
 
 `project:remove` removes Dockavel registration only:
@@ -457,10 +530,10 @@ The command validates/reloads Nginx and restores removed Dockavel files if apply
 Once a project is registered, Dockavel can route common development commands through that project's metadata.
 
 ```bash
-./dockavel shell my-api
-./dockavel artisan my-api migrate
-./dockavel composer my-api install
-./dockavel npm frontend install
+ds my-api
+da my-api migrate
+dco my-api install
+dn frontend install
 ```
 
 ### `shell`
@@ -468,9 +541,9 @@ Once a project is registered, Dockavel can route common development commands thr
 For Laravel projects, `shell` opens Bash in the PHP runtime stored in `.dockavel.yml`. For Node projects it opens the shared Node runtime.
 
 ```bash
-./dockavel shell legacy-api   # php82 if metadata says php: "8.2"
-./dockavel shell my-api       # php85 if metadata says php: "8.5"
-./dockavel shell frontend     # node for a Node project
+ds legacy-api   # php82 if metadata says php: "8.2"
+ds my-api       # php85 if metadata says php: "8.5"
+ds frontend     # node for a Node project
 ```
 
 ### `artisan`
@@ -478,9 +551,9 @@ For Laravel projects, `shell` opens Bash in the PHP runtime stored in `.dockavel
 Runs `php artisan` in the project's configured PHP runtime and working directory:
 
 ```bash
-./dockavel artisan my-api migrate
-./dockavel artisan my-api queue:work
-./dockavel artisan my-api route:list
+da my-api migrate
+da my-api queue:work
+da my-api route:list
 ```
 
 ### `composer`
@@ -488,9 +561,9 @@ Runs `php artisan` in the project's configured PHP runtime and working directory
 Runs Composer in the same project-aware PHP runtime:
 
 ```bash
-./dockavel composer my-api install
-./dockavel composer my-api update
-./dockavel composer my-api require vendor/package
+dco my-api install
+dco my-api update
+dco my-api require vendor/package
 ```
 
 ### `npm`
@@ -498,9 +571,9 @@ Runs Composer in the same project-aware PHP runtime:
 Runs npm in the shared Node runtime. It works for Node projects and Laravel projects with `node: true` in their metadata.
 
 ```bash
-./dockavel npm my-api install
-./dockavel npm my-api run build
-./dockavel npm frontend run dev
+dn my-api install
+dn my-api run build
+dn frontend run dev
 ```
 
 Before running a project-aware command, Dockavel validates that the selected runtime is enabled and running, the project still exists on the host, and the project directory is visible inside the runtime. If Docker Desktop has a stale `projects/` bind mount, the command stops before executing the requested tool and reports the visibility problem.
@@ -548,12 +621,12 @@ All enabled runtimes can stay active at the same time.
 
 ## PHP and Composer Commands
 
-For registered projects, the project-aware shortcuts are the normal path:
+For registered projects, the short project-aware commands are the normal path after shortcut installation:
 
 ```bash
-./dockavel shell my-api
-./dockavel artisan my-api migrate
-./dockavel composer my-api install
+ds my-api
+da my-api migrate
+dco my-api install
 ```
 
 Low-level runtime commands are still available when needed:
@@ -579,9 +652,9 @@ For low-level Compose usage, prefer the Compose service name rather than the con
 For registered Node projects or Laravel projects with Node enabled:
 
 ```bash
-./dockavel npm frontend install
-./dockavel npm frontend run dev
-./dockavel shell frontend
+dn frontend install
+dn frontend run dev
+ds frontend
 ```
 
 Low-level shared runtime checks are still available:
@@ -731,21 +804,30 @@ Database credentials and host ports are also configurable in `.env`.
 ## Useful Commands
 
 ```bash
+# Help
+dockavel help
+dh
+
 # Dockavel diagnostics
-./dockavel doctor
-./dockavel source:test
+ddoc
+dsrc
 
 # Project management
-./dockavel project:add
-./dockavel project:list
-./dockavel project:edit
-./dockavel project:remove
+dpa
+dpl
+dpe my-api
+dpr my-api
 
 # Project-aware runtime commands
-./dockavel shell my-api
-./dockavel artisan my-api migrate
-./dockavel composer my-api install
-./dockavel npm frontend install
+ds my-api
+da my-api migrate
+dco my-api install
+dn frontend install
+
+# Shortcut management
+dockavel shortcuts:list
+dockavel shortcuts:install
+dockavel shortcuts:remove
 
 # Stack status
 docker compose ps
@@ -791,13 +873,13 @@ Use destructive cleanup only when you intentionally want a fresh database state.
 Start with:
 
 ```bash
-./dockavel doctor
+ddoc
 ```
 
 For source-only connectivity:
 
 ```bash
-./dockavel source:test
+dsrc
 ```
 
 This helps distinguish Docker/project configuration problems from DNS, TLS, timeout, mirror, or routing problems before doing expensive rebuilds.
@@ -832,7 +914,7 @@ Keep existing profiles selected and add the new service.
 grep '^COMPOSE_PROFILES=' .env
 docker compose config
 docker compose ps -a
-./dockavel project:list
+dpl
 ```
 
 ## Local Files and Git
@@ -855,8 +937,9 @@ GitHub Actions currently validates:
 - PHP 8.2, 8.3, 8.4, and 8.5 builds
 - required PHP runtime capabilities
 - Node.js 24 build/runtime
-- `setup.sh`, `dockavel`, Project Manager, and Project Commands shell syntax
+- `setup.sh`, `dockavel`, Project Manager, Project Commands, help and shortcuts shell syntax
 - project-aware command routing with a fake Docker CLI
+- global shortcut installation/removal and symlink routing
 - executable CLI entry point
 
 ## Roadmap
@@ -871,6 +954,7 @@ Completed core foundations:
 ✅ Doctor / source diagnostics
 ✅ Project add / list / edit / remove
 ✅ Project-aware shell / Artisan / Composer / npm
+✅ Global Dockavel CLI / help / terminal shortcuts
 ```
 
 Likely next productivity work:
