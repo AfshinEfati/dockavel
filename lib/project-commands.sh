@@ -2,7 +2,7 @@
 
 project_command_usage_error() {
     local command="$1"
-    project_error "Project name is required. Usage: ./dockavel $command <project> [arguments...]"
+    project_error "Project name is required. Usage: dockavel $command <project> [arguments...]"
 }
 
 project_command_resolve() {
@@ -94,7 +94,7 @@ project_command_prepare_php() {
 
 project_command_prepare_node() {
     if [[ "$PROJECT_COMMAND_TYPE" != "node" && "$PROJECT_COMMAND_NODE_ENABLED" != "true" ]]; then
-        project_error "Node.js is not enabled for this project. Run ./dockavel project:edit and enable the shared Node runtime first."
+        project_error "Node.js is not enabled for this project. Run dockavel project:edit and enable the shared Node runtime first."
         return 1
     fi
 

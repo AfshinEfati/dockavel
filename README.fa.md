@@ -43,6 +43,8 @@ Dockavel عمداً قرار نیست به یک استک شلوغ و همه‌ک
 - phpMyAdmin و pgAdmin به‌صورت اختیاری
 - Docker Compose Profiles برای فعال کردن فقط سرویس‌های لازم
 - نصب‌کننده تعاملی `./setup.sh`
+- CLI سراسری اختیاری با دستور `dockavel`
+- shortcutهای ترمینال مثل `ds my-api`، `da my-api migrate`، `dco my-api install` و `dpl`
 - presetهای دانلود برای Docker imageها و package repositoryها
 - Official/Global، IranServer، Runflare، China و Custom
 - عدم fallback مخفی بین registryها در presetهای منطقه‌ای
@@ -50,9 +52,9 @@ Dockavel عمداً قرار نیست به یک استک شلوغ و همه‌ک
 - پوشه مشترک `projects/` برای runtimeها
 - Project Manager برای add/list/edit/remove
 - دستورهای Project-aware شامل `shell`، `artisan`، `composer` و `npm`
-- ابزار عیب‌یابی read-only با `./dockavel doctor`
-- تست read-only منبع دانلود با `./dockavel source:test`
-- تست خودکار Compose، runtimeها، shell scriptها و routing دستورهای پروژه در GitHub Actions
+- ابزار عیب‌یابی read-only با `dockavel doctor` یا `ddoc`
+- تست read-only منبع دانلود با `dockavel source:test` یا `dsrc`
+- تست خودکار Compose، runtimeها، shell scriptها، routing دستورهای پروژه و shortcutها در GitHub Actions
 - عدم وابستگی به image خصوصی یا registry اختصاصی Dockavel
 
 ## معماری
@@ -154,7 +156,8 @@ setup از شما می‌خواهد این موارد را انتخاب کنید
 3. دیتابیس‌ها
 4. سرویس‌های اختیاری
 5. ابزارهای مدیریت دیتابیس
-6. build/start شدن استک
+6. نصب دستور global `dockavel` و shortcutها
+7. build/start شدن استک
 
 کلیدها:
 
@@ -201,6 +204,75 @@ docker compose up -d --build
 ```
 
 `--ignore-buildable` مانع می‌شود Compose سرویس‌های PHP و Node را که باید local build شوند به‌اشتباه مثل image آماده Dockavel pull کند.
+
+## CLI سراسری و Shortcutها
+
+در setup می‌توانید نصب دستور global و shortcutها را انتخاب کنید. بعداً هم دستی قابل نصب هستند:
+
+```bash
+./dockavel shortcuts:install
+```
+
+Dockavel symlinkهای مدیریت‌شده را در `~/.local/bin` می‌سازد. اگر این مسیر داخل `PATH` نباشد، یک block مشخص و idempotent به startup config مربوط به Bash یا Zsh اضافه می‌شود و دستور reload دقیق نمایش داده می‌شود.
+
+بعد از نصب می‌توانید از هر مسیر اجرا کنید:
+
+```bash
+dockavel help
+dockavel project:list
+```
+
+Shortcutهای روزمره:
+
+```text
+ds <project>             → dockavel shell <project>
+da <project> ...         → dockavel artisan <project> ...
+dco <project> ...        → dockavel composer <project> ...
+dn <project> ...         → dockavel npm <project> ...
+dpa                      → dockavel project:add
+dpl                      → dockavel project:list
+dpe <project>            → dockavel project:edit <project>
+dpr <project>            → dockavel project:remove <project>
+ddoc                     → dockavel doctor
+dsrc                     → dockavel source:test
+dh [command]             → dockavel help [command]
+```
+
+مثال:
+
+```bash
+ds my-api
+da my-api migrate
+dco my-api install
+dn frontend run dev
+dpl
+dh artisan
+```
+
+عمداً از `ddoc` به‌جای `dd` استفاده شده چون `dd` یک command استاندارد Unix است.
+
+Dockavel هیچ command یا فایل موجودی را overwrite نمی‌کند. نصب shortcutها idempotent است و اگر نامی از قبل وجود داشته باشد فقط conflict را گزارش می‌کند.
+
+مدیریت shortcutها:
+
+```bash
+dockavel shortcuts:list
+dockavel shortcuts:install
+dockavel shortcuts:remove
+```
+
+`shortcuts:remove` فقط symlinkهای مدیریت‌شده توسط Dockavel را پاک می‌کند و PATH مربوط به `~/.local/bin` را دست نمی‌زند، چون ممکن است commandهای دیگری هم در آن مسیر وجود داشته باشند.
+
+Help کامل ترمینال:
+
+```bash
+dockavel help
+dockavel help shell
+dh
+dh composer
+```
+
+قبل از نصب shortcutها همه دستورها همچنان با `./dockavel` کار می‌کنند.
 
 ## منبع‌های دانلود
 
@@ -264,7 +336,7 @@ Docker، Debian، Composer و npm از mirrorهای Runflare استفاده می
 اجرا:
 
 ```bash
-./dockavel doctor
+dockavel doctor
 ```
 
 Doctor کاملاً **read-only** است. `.env`، Docker، DNS، mirrorها، containerها یا hosts سیستم را تغییر نمی‌دهد.
@@ -316,7 +388,7 @@ npm                      ✅ HTTP 200 · 0.44s · 185.x.x.x
 ## تست منبع دانلود فعلی
 
 ```bash
-./dockavel source:test
+dockavel source:test
 ```
 
 این دستور فقط endpointهای موجود در `.env` را تست می‌کند و preset را تغییر نمی‌دهد.
@@ -349,8 +421,10 @@ Dockavel/
 │   └── frontend/
 │       └── .dockavel.yml
 ├── lib/
+│   ├── help.sh
 │   ├── project-manager.sh
-│   └── project-commands.sh
+│   ├── project-commands.sh
+│   └── shortcuts.sh
 ├── nginx/
 │   ├── conf.d/
 │   ├── template-laravel.conf.example
@@ -372,7 +446,8 @@ Project Manager یک پروژه **موجود** داخل `projects/` را registe
 ### افزودن پروژه
 
 ```bash
-./dockavel project:add
+dockavel project:add
+# یا: dpa
 ```
 
 این دستور:
@@ -409,7 +484,8 @@ node: true
 ### لیست پروژه‌ها
 
 ```bash
-./dockavel project:list
+dpl
+# یا: dockavel project:list
 ```
 
 نمونه:
@@ -425,13 +501,13 @@ frontend             node       frontend.local               Node :3000     none
 انتخاب interactive:
 
 ```bash
-./dockavel project:edit
+dockavel project:edit
 ```
 
 یا مستقیم با نام پروژه:
 
 ```bash
-./dockavel project:edit my-api
+dpe my-api
 ```
 
 موارد قابل ویرایش:
@@ -453,13 +529,13 @@ Path و Type پروژه هنگام edit ثابت می‌مانند.
 Interactive:
 
 ```bash
-./dockavel project:remove
+dockavel project:remove
 ```
 
 مستقیم:
 
 ```bash
-./dockavel project:remove my-api
+dpr my-api
 ```
 
 `project:remove` فقط registration مربوط به Dockavel را حذف می‌کند:
@@ -478,10 +554,10 @@ nginx/conf.d/my-api.local.conf
 بعد از register شدن پروژه، Dockavel می‌تواند دستورهای روزمره را با استفاده از metadata همان پروژه به runtime درست بفرستد:
 
 ```bash
-./dockavel shell my-api
-./dockavel artisan my-api migrate
-./dockavel composer my-api install
-./dockavel npm frontend install
+ds my-api
+da my-api migrate
+dco my-api install
+dn frontend install
 ```
 
 ### `shell`
@@ -489,9 +565,9 @@ nginx/conf.d/my-api.local.conf
 برای پروژه Laravel، Bash داخل PHP runtime ثبت‌شده در `.dockavel.yml` باز می‌شود. برای پروژه Node، shell داخل runtime مشترک Node باز می‌شود.
 
 ```bash
-./dockavel shell legacy-api   # اگر php: "8.2" باشد → php82
-./dockavel shell my-api       # اگر php: "8.5" باشد → php85
-./dockavel shell frontend     # پروژه Node → node
+ds legacy-api   # اگر php: "8.2" باشد → php82
+ds my-api       # اگر php: "8.5" باشد → php85
+ds frontend     # پروژه Node → node
 ```
 
 ### `artisan`
@@ -499,9 +575,9 @@ nginx/conf.d/my-api.local.conf
 `php artisan` را داخل PHP runtime و working directory همان پروژه اجرا می‌کند:
 
 ```bash
-./dockavel artisan my-api migrate
-./dockavel artisan my-api queue:work
-./dockavel artisan my-api route:list
+da my-api migrate
+da my-api queue:work
+da my-api route:list
 ```
 
 اجرای Artisan برای پروژه Node رد می‌شود.
@@ -511,9 +587,9 @@ nginx/conf.d/my-api.local.conf
 Composer در همان PHP runtime ثبت‌شده پروژه اجرا می‌شود:
 
 ```bash
-./dockavel composer my-api install
-./dockavel composer my-api update
-./dockavel composer my-api require vendor/package
+dco my-api install
+dco my-api update
+dco my-api require vendor/package
 ```
 
 ### `npm`
@@ -521,9 +597,9 @@ Composer در همان PHP runtime ثبت‌شده پروژه اجرا می‌ش
 npm داخل runtime مشترک Node اجرا می‌شود. این دستور برای پروژه‌های Node و پروژه‌های Laravel که در metadata مقدار `node: true` دارند قابل استفاده است:
 
 ```bash
-./dockavel npm my-api install
-./dockavel npm my-api run build
-./dockavel npm frontend run dev
+dn my-api install
+dn my-api run build
+dn frontend run dev
 ```
 
 قبل از اجرای این دستورها Dockavel بررسی می‌کند runtime موردنیاز فعال و در حال اجرا باشد، پوشه پروژه روی host هنوز وجود داشته باشد و همان مسیر داخل runtime انتخاب‌شده هم قابل مشاهده باشد.
@@ -576,9 +652,9 @@ php85:9000
 برای پروژه‌های register‌شده مسیر معمول استفاده از shortcutهای Project-aware است:
 
 ```bash
-./dockavel shell my-api
-./dockavel artisan my-api migrate
-./dockavel composer my-api install
+ds my-api
+da my-api migrate
+dco my-api install
 ```
 
 برای بررسی‌های low-level همچنان می‌توانید مستقیم از Compose استفاده کنید:
@@ -604,9 +680,9 @@ Local image     : dev-stack-php85
 برای پروژه Node ثبت‌شده یا Laravel با Node فعال:
 
 ```bash
-./dockavel npm frontend install
-./dockavel npm frontend run dev
-./dockavel shell frontend
+dn frontend install
+dn frontend run dev
+ds frontend
 ```
 
 برای بررسی مستقیم runtime مشترک:
@@ -756,21 +832,30 @@ credentialهای دیتابیس و پورت‌ها نیز در `.env` قابل �
 ## دستورات کاربردی
 
 ```bash
+# Help
+dockavel help
+dh
+
 # عیب‌یابی Dockavel
-./dockavel doctor
-./dockavel source:test
+ddoc
+dsrc
 
 # مدیریت پروژه‌ها
-./dockavel project:add
-./dockavel project:list
-./dockavel project:edit
-./dockavel project:remove
+dpa
+dpl
+dpe my-api
+dpr my-api
 
 # دستورهای Project-aware
-./dockavel shell my-api
-./dockavel artisan my-api migrate
-./dockavel composer my-api install
-./dockavel npm frontend install
+ds my-api
+da my-api migrate
+dco my-api install
+dn frontend install
+
+# مدیریت shortcutها
+dockavel shortcuts:list
+dockavel shortcuts:install
+dockavel shortcuts:remove
 
 # وضعیت Stack
 docker compose ps
@@ -816,13 +901,13 @@ docker compose down -v
 اول اجرا کنید:
 
 ```bash
-./dockavel doctor
+ddoc
 ```
 
 برای تست فقط sourceها:
 
 ```bash
-./dockavel source:test
+dsrc
 ```
 
 این کار کمک می‌کند مشکل Docker/project را از DNS، TLS، timeout، mirror یا route جدا کنید و بی‌دلیل وارد rebuildهای سنگین نشوید.
@@ -855,7 +940,7 @@ Doctor مشخص می‌کند پورت 80 آزاد است، توسط `dockavel-n
 grep '^COMPOSE_PROFILES=' .env
 docker compose config
 docker compose ps -a
-./dockavel project:list
+dpl
 ```
 
 ## فایل‌های Local و Git
@@ -878,8 +963,9 @@ GitHub Actions فعلاً این موارد را بررسی می‌کند:
 - build نسخه‌های PHP 8.2، 8.3، 8.4 و 8.5
 - قابلیت‌های ضروری PHP runtimeها
 - build/runtime مربوط به Node.js 24
-- syntax مربوط به `setup.sh`، `dockavel`، Project Manager و Project Commands
+- syntax مربوط به `setup.sh`، `dockavel`، Project Manager، Project Commands، Help و Shortcuts
 - routing دستورهای Project-aware با Docker mock
+- نصب/حذف global shortcutها و resolve شدن symlinkها
 - executable بودن CLI اصلی
 
 ## Roadmap
@@ -894,6 +980,7 @@ GitHub Actions فعلاً این موارد را بررسی می‌کند:
 ✅ Doctor / source diagnostics
 ✅ Project add / list / edit / remove
 ✅ Project-aware shell / Artisan / Composer / npm
+✅ Global Dockavel CLI / Help / terminal shortcuts
 ```
 
 گزینه‌های منطقی بعدی:
