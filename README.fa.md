@@ -4,6 +4,8 @@
 
 [English](README.md) | **فارسی**
 
+[وب‌سایت](https://afshinefati.github.io/dockavel-site/) · [مستندات](https://afshinefati.github.io/dockavel-site/docs/) · [راهنمای مشارکت](CONTRIBUTING.md)
+
 Dockavel یک محیط توسعه محلی سبک و قابل تنظیم برای اجرای هم‌زمان چند پروژه **Laravel و Node.js** روی یک Docker Compose stack مشترک است.
 
 هدف این است که چند پروژه با نسخه‌های متفاوت PHP، دیتابیس‌های مختلف، دامنه‌های محلی جدا و شرایط شبکه‌ای متفاوت را بدون ساختن یک استک تکراری برای هر پروژه مدیریت کنید. Dockavel عمداً Core کوچکی دارد: فقط سرویس‌های موردنیاز را فعال می‌کنید، پروژه‌ها را با CLI ساده مدیریت می‌کنید و تنظیمات اضافه‌ای که استفاده روزمره را پیچیده کند وارد هسته نمی‌شود.
@@ -684,7 +686,7 @@ DOCKER_LIBRARY_PREFIX=docker.io/library/
 DOCKER_NAMESPACE_PREFIX=docker.io/
 DEBIAN_MIRROR=https://deb.debian.org/debian
 DEBIAN_SECURITY_MIRROR=https://deb.debian.org/debian-security
-COMPOSER_REPOSITORY=https://repo.packagist.org
+COMPOSER_REPOSITORY=https://repo.packagist.org/
 NPM_REGISTRY=https://registry.npmjs.org/
 NPM_STRICT_SSL=true
 ```
@@ -837,9 +839,11 @@ GitHub Actions فعلاً این موارد را بررسی می‌کند:
 
 ## مشارکت
 
-Issue و Pull Request پذیرفته می‌شود.
+Issue و Pull Request پذیرفته می‌شود. راهنمای کامل در [CONTRIBUTING.md](CONTRIBUTING.md) قرار دارد.
 
-در تغییرات مربوط به runtime، source، mirror، installer یا Project Manager بهتر است رفتار presetها شفاف بماند و dependency یا registry fallback مخفی اضافه نشود.
+هر قابلیت، سرویس، runtime، source preset، دستور CLI، تنظیم، پورت، workflow یا تغییر رفتار قابل مشاهده برای کاربر باید هم‌زمان در READMEهای انگلیسی/فارسی و [وب‌سایت و مستندات عمومی Dockavel](https://afshinefati.github.io/dockavel-site/docs/) به‌روزرسانی شود.
+
+در تغییرات مربوط به runtime، source، mirror، installer یا Project Manager رفتار presetها باید شفاف بماند و dependency یا registry fallback مخفی اضافه نشود.
 
 ## License
 
