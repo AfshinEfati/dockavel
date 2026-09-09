@@ -476,6 +476,14 @@ if [[ "$DOWNLOAD_SOURCE_PRESET" == "runflare" ]]; then
     printf '\nNote: Runflare may enforce a request quota on its free mirror service.\n'
 fi
 
+choose_one "Install the global Dockavel command and terminal shortcuts?" 0 \
+    "Yes, install dockavel + shortcuts" \
+    "No, keep repository-only CLI"
+
+if [[ "$CHOICE_INDEX" -eq 0 ]]; then
+    "$ROOT_DIR/dockavel" shortcuts:install
+fi
+
 choose_one "Build and start the selected stack now?" 0 \
     "Yes, build and start" \
     "No, save configuration only"
