@@ -110,9 +110,14 @@ jobs:
           bash -n setup.sh
           bash -n dockavel
           bash -n lib/project-manager.sh
+          bash -n lib/project-commands.sh
+          bash -n tests/project-commands.sh
           test -x dockavel
 
       - name: CLI smoke test
         run: |
           ./dockavel help >/dev/null
           ./dockavel project:list >/dev/null
+
+      - name: Project command routing tests
+        run: bash tests/project-commands.sh
