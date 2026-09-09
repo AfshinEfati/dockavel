@@ -19,7 +19,7 @@ chmod +x "$HOME/.local/bin/dsrc"
 
 "$REPO_ROOT/dockavel" shortcuts:install >/tmp/dockavel-shortcuts-install.log
 
-for name in dockavel ds da dco dn dpa dpl dpe dpr ddoc dh; do
+for name in dockavel ds da dco dn dpa dpl dpe dpr dpd dpc dbs dbc dbx dbi ddoc dv dh; do
     if [[ ! -L "$HOME/.local/bin/$name" ]]; then
         printf 'Expected shortcut symlink was not installed: %s\n' "$name" >&2
         exit 1
@@ -36,14 +36,18 @@ if [[ "$("$HOME/.local/bin/dsrc")" != "existing" ]]; then
     exit 1
 fi
 
-# Symlink invocation must still resolve the real Dockavel repository root.
-if ! "$HOME/.local/bin/dh" shell | grep -Fq 'ds <project>'; then
-    printf 'dh shell did not route to Dockavel help through the symlink.\n' >&2
+if ! "$HOME/.local/bin/dh" project:check | grep -Fq 'dpc <project>'; then
+    printf 'dh project:check did not route to detailed help.\n' >&2
     exit 1
 fi
 
-if ! "$HOME/.local/bin/dockavel" help artisan | grep -Fq 'da <project>'; then
-    printf 'Global dockavel command did not resolve detailed help.\n' >&2
+if ! "$HOME/.local/bin/dockavel" help database | grep -Fq 'dbx <project>'; then
+    printf 'Global dockavel command did not expose database helper help.\n' >&2
+    exit 1
+fi
+
+if ! "$HOME/.local/bin/dv" | grep -Fq 'Dockavel '; then
+    printf 'dv did not resolve the Dockavel version command.\n' >&2
     exit 1
 fi
 
@@ -55,7 +59,7 @@ if [[ "$(grep -Fc '# >>> Dockavel CLI >>>' "$HOME/.bashrc")" -ne 1 ]]; then
 fi
 
 "$REPO_ROOT/dockavel" shortcuts:remove >/dev/null
-for name in dockavel ds da dco dn dpa dpl dpe dpr ddoc dh; do
+for name in dockavel ds da dco dn dpa dpl dpe dpr dpd dpc dbs dbc dbx dbi ddoc dv dh; do
     if [[ -e "$HOME/.local/bin/$name" || -L "$HOME/.local/bin/$name" ]]; then
         printf 'Managed shortcut was not removed: %s\n' "$name" >&2
         exit 1
