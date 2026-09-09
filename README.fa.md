@@ -49,9 +49,10 @@ Dockavel عمداً قرار نیست به یک استک شلوغ و همه‌ک
 - مسیریابی Nginx برای هر پروژه و runtime
 - پوشه مشترک `projects/` برای runtimeها
 - Project Manager برای add/list/edit/remove
+- دستورهای Project-aware شامل `shell`، `artisan`، `composer` و `npm`
 - ابزار عیب‌یابی read-only با `./dockavel doctor`
 - تست read-only منبع دانلود با `./dockavel source:test`
-- تست خودکار Compose، runtimeها و shell scriptها در GitHub Actions
+- تست خودکار Compose، runtimeها، shell scriptها و routing دستورهای پروژه در GitHub Actions
 - عدم وابستگی به image خصوصی یا registry اختصاصی Dockavel
 
 ## معماری
@@ -348,7 +349,8 @@ Dockavel/
 │   └── frontend/
 │       └── .dockavel.yml
 ├── lib/
-│   └── project-manager.sh
+│   ├── project-manager.sh
+│   └── project-commands.sh
 ├── nginx/
 │   ├── conf.d/
 │   ├── template-laravel.conf.example
@@ -471,6 +473,65 @@ nginx/conf.d/my-api.local.conf
 
 در صورت fail شدن Nginx validation/reload، فایل‌های Dockavel restore می‌شوند.
 
+## دستورات Project-aware
+
+بعد از register شدن پروژه، Dockavel می‌تواند دستورهای روزمره را با استفاده از metadata همان پروژه به runtime درست بفرستد:
+
+```bash
+./dockavel shell my-api
+./dockavel artisan my-api migrate
+./dockavel composer my-api install
+./dockavel npm frontend install
+```
+
+### `shell`
+
+برای پروژه Laravel، Bash داخل PHP runtime ثبت‌شده در `.dockavel.yml` باز می‌شود. برای پروژه Node، shell داخل runtime مشترک Node باز می‌شود.
+
+```bash
+./dockavel shell legacy-api   # اگر php: "8.2" باشد → php82
+./dockavel shell my-api       # اگر php: "8.5" باشد → php85
+./dockavel shell frontend     # پروژه Node → node
+```
+
+### `artisan`
+
+`php artisan` را داخل PHP runtime و working directory همان پروژه اجرا می‌کند:
+
+```bash
+./dockavel artisan my-api migrate
+./dockavel artisan my-api queue:work
+./dockavel artisan my-api route:list
+```
+
+اجرای Artisan برای پروژه Node رد می‌شود.
+
+### `composer`
+
+Composer در همان PHP runtime ثبت‌شده پروژه اجرا می‌شود:
+
+```bash
+./dockavel composer my-api install
+./dockavel composer my-api update
+./dockavel composer my-api require vendor/package
+```
+
+### `npm`
+
+npm داخل runtime مشترک Node اجرا می‌شود. این دستور برای پروژه‌های Node و پروژه‌های Laravel که در metadata مقدار `node: true` دارند قابل استفاده است:
+
+```bash
+./dockavel npm my-api install
+./dockavel npm my-api run build
+./dockavel npm frontend run dev
+```
+
+قبل از اجرای این دستورها Dockavel بررسی می‌کند runtime موردنیاز فعال و در حال اجرا باشد، پوشه پروژه روی host هنوز وجود داشته باشد و همان مسیر داخل runtime انتخاب‌شده هم قابل مشاهده باشد.
+
+اگر Docker Desktop/WSL دچار stale bind mount شده باشد و پروژه روی host وجود داشته باشد ولی داخل container دیده نشود، Dockavel قبل از اجرای Artisan، Composer، npm یا shell متوقف می‌شود و مشکل visibility/mount را اعلام می‌کند.
+
+تمام argumentهای بعد از نام پروژه مستقیم به command اصلی پاس داده می‌شوند و داخل یک shell اضافه wrap نمی‌شوند.
+
 ## فایل hosts
 
 Dockavel عمداً hosts سیستم host را خودکار تغییر نمی‌دهد.
@@ -512,16 +573,19 @@ php85:9000
 
 ## دستورات PHP و Composer
 
-بررسی نسخه:
+برای پروژه‌های register‌شده مسیر معمول استفاده از shortcutهای Project-aware است:
+
+```bash
+./dockavel shell my-api
+./dockavel artisan my-api migrate
+./dockavel composer my-api install
+```
+
+برای بررسی‌های low-level همچنان می‌توانید مستقیم از Compose استفاده کنید:
 
 ```bash
 docker compose exec php82 php -v
 docker compose exec php85 php -v
-```
-
-ورود به shell PHP:
-
-```bash
 docker compose exec php85 bash
 ```
 
@@ -533,27 +597,23 @@ Container name  : dockavel-php85
 Local image     : dev-stack-php85
 ```
 
-برای استفاده عادی بهتر است از service name استفاده شود:
-
-```bash
-docker compose exec php85 bash
-```
+در استفاده low-level بهتر است service name مربوط به Compose را استفاده کنید، نه container name را.
 
 ## پروژه‌های Node.js
 
-بررسی runtime مشترک:
+برای پروژه Node ثبت‌شده یا Laravel با Node فعال:
+
+```bash
+./dockavel npm frontend install
+./dockavel npm frontend run dev
+./dockavel shell frontend
+```
+
+برای بررسی مستقیم runtime مشترک:
 
 ```bash
 docker compose exec node node --version
 docker compose exec node npm --version
-```
-
-نصب dependency به‌صورت دستی:
-
-```bash
-docker compose exec node bash
-cd /var/www/frontend
-npm install
 ```
 
 پروژه Node ثبت‌شده در Project Manager از پورت داخلی محدوده `3000-3099` استفاده می‌کند و از طریق Nginx در دسترس قرار می‌گیرد.
@@ -686,7 +746,7 @@ DOCKER_LIBRARY_PREFIX=docker.io/library/
 DOCKER_NAMESPACE_PREFIX=docker.io/
 DEBIAN_MIRROR=https://deb.debian.org/debian
 DEBIAN_SECURITY_MIRROR=https://deb.debian.org/debian-security
-COMPOSER_REPOSITORY=https://repo.packagist.org/
+COMPOSER_REPOSITORY=https://repo.packagist.org
 NPM_REGISTRY=https://registry.npmjs.org/
 NPM_STRICT_SSL=true
 ```
@@ -705,6 +765,12 @@ credentialهای دیتابیس و پورت‌ها نیز در `.env` قابل �
 ./dockavel project:list
 ./dockavel project:edit
 ./dockavel project:remove
+
+# دستورهای Project-aware
+./dockavel shell my-api
+./dockavel artisan my-api migrate
+./dockavel composer my-api install
+./dockavel npm frontend install
 
 # وضعیت Stack
 docker compose ps
@@ -771,6 +837,10 @@ Doctor مشخص می‌کند پورت 80 آزاد است، توسط `dockavel-n
 
 در صورت نیاز `./setup.sh` را دوباره اجرا کنید و preset دیگری یا `Custom endpoints` را صریح انتخاب کنید.
 
+### پروژه روی host هست ولی داخل runtime دیده نمی‌شود
+
+دستورهای Project-aware قبل از اجرا visibility مسیر پروژه را داخل runtime بررسی می‌کنند. اگر Docker Desktop/WSL دچار stale bind mount شود، Dockavel به‌جای اجرای command در وضعیت اشتباه خطای mount/visibility می‌دهد. وقتی مسیر host صحیح است، restart کردن Docker Desktop می‌تواند این وضعیت stale را برطرف کند.
+
 ### اضافه کردن سرویس بدون حذف استک
 
 ```bash
@@ -808,7 +878,8 @@ GitHub Actions فعلاً این موارد را بررسی می‌کند:
 - build نسخه‌های PHP 8.2، 8.3، 8.4 و 8.5
 - قابلیت‌های ضروری PHP runtimeها
 - build/runtime مربوط به Node.js 24
-- syntax مربوط به `setup.sh`، `dockavel` و Project Manager
+- syntax مربوط به `setup.sh`، `dockavel`، Project Manager و Project Commands
+- routing دستورهای Project-aware با Docker mock
 - executable بودن CLI اصلی
 
 ## Roadmap
@@ -822,20 +893,18 @@ GitHub Actions فعلاً این موارد را بررسی می‌کند:
 ✅ MySQL / PostgreSQL / Redis / Node
 ✅ Doctor / source diagnostics
 ✅ Project add / list / edit / remove
+✅ Project-aware shell / Artisan / Composer / npm
 ```
 
-لایه بعدی برای راحت‌تر شدن کار روزمره:
+گزینه‌های منطقی بعدی:
 
 ```text
-./dockavel shell my-api
-./dockavel artisan my-api migrate
-./dockavel composer my-api install
-./dockavel npm frontend install
+- تشخیص هوشمندتر پروژه و پیشنهاد runtime
+- Database Helperها برای workflowهای تکراری local
+- بهبود بیشتر Doctor و Project Health diagnostics
 ```
 
-این shortcutها از metadata پروژه استفاده می‌کنند تا کاربر لازم نباشد container name یا runtime mapping را حفظ کند.
-
-قابلیت‌های بعدی هم فقط در صورتی وارد Core می‌شوند که واقعاً setup، مدیریت پروژه یا debug را ساده‌تر کنند.
+این موارد هنوز featureهای جدا هستند و قرار نیست automation مخفی یا تصمیم‌گیری غیرشفاف وارد Dockavel کنند.
 
 ## مشارکت
 
