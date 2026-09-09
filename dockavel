@@ -1,7 +1,19 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+resolve_dockavel_root() {
+    local source="${BASH_SOURCE[0]}" source_dir
+
+    while [[ -h "$source" ]]; do
+        source_dir="$(cd -P -- "$(dirname -- "$source")" && pwd)"
+        source="$(readlink "$source")"
+        [[ "$source" != /* ]] && source="$source_dir/$source"
+    done
+
+    cd -P -- "$(dirname -- "$source")" && pwd
+}
+
+ROOT_DIR="$(resolve_dockavel_root)"
 ENV_FILE="$ROOT_DIR/.env"
 ENV_EXAMPLE="$ROOT_DIR/.env.example"
 
@@ -9,38 +21,6 @@ OK='✅'
 WARN='⚠️ '
 FAIL='❌'
 INFO='ℹ️ '
-
-print_help() {
-    cat <<'HELP'
-Dockavel
-
-Usage:
-  ./dockavel doctor
-  ./dockavel source:test
-  ./dockavel project:add
-  ./dockavel project:list
-  ./dockavel project:edit [project]
-  ./dockavel project:remove [project]
-  ./dockavel shell <project>
-  ./dockavel artisan <project> [arguments...]
-  ./dockavel composer <project> [arguments...]
-  ./dockavel npm <project> [arguments...]
-  ./dockavel help
-
-Commands:
-  doctor          Diagnose Docker, WSL, selected download sources, ports and stack health.
-  source:test     Test the download endpoints currently configured in .env without changing anything.
-  project:add     Register an existing Laravel or Node.js project and generate its local Nginx config.
-  project:list    List projects registered through Dockavel metadata.
-  project:edit    Edit a registered project's domain/runtime/service metadata and regenerate Nginx.
-  project:remove  Remove Dockavel metadata and Nginx config without deleting the project source files.
-  shell           Open a shell in the registered project's configured PHP or Node runtime.
-  artisan         Run Laravel Artisan in the project's configured PHP runtime.
-  composer        Run Composer in the project's configured PHP runtime.
-  npm             Run npm in the shared Node runtime for a Node-enabled project.
-  help            Show this help.
-HELP
-}
 
 get_env_value() {
     local key="$1" file="${2:-$ENV_FILE}"
@@ -340,8 +320,27 @@ source "$ROOT_DIR/lib/project-manager.sh"
 # shellcheck source=lib/project-commands.sh
 source "$ROOT_DIR/lib/project-commands.sh"
 
+# Global command installation and short aliases are isolated from runtime logic.
+# shellcheck source=lib/shortcuts.sh
+source "$ROOT_DIR/lib/shortcuts.sh"
+
+# CLI help is kept separate so it can grow without bloating the entry point.
+# shellcheck source=lib/help.sh
+source "$ROOT_DIR/lib/help.sh"
+
 main() {
-    local command="${1:-help}"
+    local command invoked_name
+    invoked_name="$(basename -- "$0")"
+
+    if shortcut_target_for_name "$invoked_name" >/dev/null 2>&1; then
+        command="$(shortcut_target_for_name "$invoked_name")"
+    else
+        command="${1:-help}"
+        if [[ "$#" -gt 0 ]]; then
+            shift
+        fi
+    fi
+
     case "$command" in
         doctor)
             doctor
@@ -356,33 +355,38 @@ main() {
             project_list
             ;;
         project:edit|project-edit)
-            project_edit "${2:-}"
+            project_edit "${1:-}"
             ;;
         project:remove|project-remove)
-            project_remove "${2:-}"
+            project_remove "${1:-}"
             ;;
         shell)
-            shift
             project_shell "$@"
             ;;
         artisan)
-            shift
             project_artisan "$@"
             ;;
         composer)
-            shift
             project_composer "$@"
             ;;
         npm)
-            shift
             project_npm "$@"
             ;;
+        shortcuts:install|shortcuts-install)
+            shortcuts_install
+            ;;
+        shortcuts:list|shortcuts-list)
+            shortcuts_list
+            ;;
+        shortcuts:remove|shortcuts-remove)
+            shortcuts_remove
+            ;;
         help|-h|--help)
-            print_help
+            dockavel_help "${1:-}"
             ;;
         *)
             printf 'Unknown command: %s\n\n' "$command" >&2
-            print_help >&2
+            dockavel_help >&2
             return 2
             ;;
     esac
