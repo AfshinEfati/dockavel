@@ -118,6 +118,7 @@ jobs:
           bash -n lib/help.sh
           bash -n tests/project-commands.sh
           bash -n tests/project-detection.sh
+          bash -n tests/database.sh
           bash -n tests/shortcuts.sh
           test -x dockavel
 
@@ -136,6 +137,9 @@ jobs:
 
       - name: Project command routing tests
         run: bash tests/project-commands.sh
+
+      - name: Database helper tests
+        run: bash tests/database.sh
 
       - name: Global shortcut tests
         run: bash tests/shortcuts.sh
