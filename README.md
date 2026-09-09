@@ -4,6 +4,8 @@
 
 **English** | [فارسی](README.fa.md)
 
+[Website](https://afshinefati.github.io/dockavel-site/) · [Documentation](https://afshinefati.github.io/dockavel-site/docs/) · [Contributing](CONTRIBUTING.md)
+
 Dockavel is a lightweight, configurable local development environment for running multiple **Laravel and Node.js projects** on one shared Docker Compose stack.
 
 It is designed for developers who maintain projects with different PHP versions, databases, local domains, and network constraints. Dockavel keeps the core small: enable only what you need, manage projects through a simple CLI, and avoid turning local development into a large configuration project of its own.
@@ -818,7 +820,9 @@ Possible later additions remain intentionally limited to features that reduce re
 
 ## Contributing
 
-Issues and pull requests are welcome. When changing Docker sources, runtime versions, installer behavior, or project management, keep regional-source behavior explicit and avoid hidden registry fallbacks.
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+User-facing features, services, runtimes, source presets, CLI commands, configuration changes, ports and workflows should keep the runtime README files and the public [website/documentation](https://afshinefati.github.io/dockavel-site/docs/) synchronized.
 
 ## License
 
