@@ -49,9 +49,10 @@ The goal is useful automation without becoming a large all-purpose stack.
 - Nginx routing per project and per runtime
 - Shared `projects/` directory across runtimes
 - Project manager CLI: add, list, edit, and remove registration
+- Project-aware `shell`, `artisan`, `composer`, and `npm` commands
 - Read-only environment diagnostics with `./dockavel doctor`
 - Read-only source connectivity checks with `./dockavel source:test`
-- CI validation for Compose profiles, runtimes, and shell scripts
+- CI validation for Compose profiles, runtimes, shell scripts, and project-command routing
 - No private or Dockavel-specific registry images are required
 
 ## Architecture
@@ -327,7 +328,8 @@ Dockavel/
 │   └── frontend/
 │       └── .dockavel.yml
 ├── lib/
-│   └── project-manager.sh
+│   ├── project-manager.sh
+│   └── project-commands.sh
 ├── nginx/
 │   ├── conf.d/
 │   ├── template-laravel.conf.example
@@ -450,6 +452,61 @@ It **never deletes the project source directory**.
 
 The command validates/reloads Nginx and restores removed Dockavel files if applying the change fails.
 
+## Project-aware Commands
+
+Once a project is registered, Dockavel can route common development commands through that project's metadata.
+
+```bash
+./dockavel shell my-api
+./dockavel artisan my-api migrate
+./dockavel composer my-api install
+./dockavel npm frontend install
+```
+
+### `shell`
+
+For Laravel projects, `shell` opens Bash in the PHP runtime stored in `.dockavel.yml`. For Node projects it opens the shared Node runtime.
+
+```bash
+./dockavel shell legacy-api   # php82 if metadata says php: "8.2"
+./dockavel shell my-api       # php85 if metadata says php: "8.5"
+./dockavel shell frontend     # node for a Node project
+```
+
+### `artisan`
+
+Runs `php artisan` in the project's configured PHP runtime and working directory:
+
+```bash
+./dockavel artisan my-api migrate
+./dockavel artisan my-api queue:work
+./dockavel artisan my-api route:list
+```
+
+### `composer`
+
+Runs Composer in the same project-aware PHP runtime:
+
+```bash
+./dockavel composer my-api install
+./dockavel composer my-api update
+./dockavel composer my-api require vendor/package
+```
+
+### `npm`
+
+Runs npm in the shared Node runtime. It works for Node projects and Laravel projects with `node: true` in their metadata.
+
+```bash
+./dockavel npm my-api install
+./dockavel npm my-api run build
+./dockavel npm frontend run dev
+```
+
+Before running a project-aware command, Dockavel validates that the selected runtime is enabled and running, the project still exists on the host, and the project directory is visible inside the runtime. If Docker Desktop has a stale `projects/` bind mount, the command stops before executing the requested tool and reports the visibility problem.
+
+Arguments after the project selector are passed directly to the underlying command instead of being wrapped in an extra shell.
+
 ## Hosts File
 
 Dockavel intentionally does not edit the host machine's hosts file automatically.
@@ -491,16 +548,19 @@ All enabled runtimes can stay active at the same time.
 
 ## PHP and Composer Commands
 
-Run PHP directly in a runtime:
+For registered projects, the project-aware shortcuts are the normal path:
+
+```bash
+./dockavel shell my-api
+./dockavel artisan my-api migrate
+./dockavel composer my-api install
+```
+
+Low-level runtime commands are still available when needed:
 
 ```bash
 docker compose exec php82 php -v
 docker compose exec php85 php -v
-```
-
-Open a PHP shell:
-
-```bash
 docker compose exec php85 bash
 ```
 
@@ -512,27 +572,23 @@ Container name  : dockavel-php85
 Local image     : dev-stack-php85
 ```
 
-For normal Dockavel usage, prefer the Compose service name:
-
-```bash
-docker compose exec php85 bash
-```
+For low-level Compose usage, prefer the Compose service name rather than the container name.
 
 ## Node.js Projects
 
-Check the shared runtime:
+For registered Node projects or Laravel projects with Node enabled:
+
+```bash
+./dockavel npm frontend install
+./dockavel npm frontend run dev
+./dockavel shell frontend
+```
+
+Low-level shared runtime checks are still available:
 
 ```bash
 docker compose exec node node --version
 docker compose exec node npm --version
-```
-
-Install dependencies manually:
-
-```bash
-docker compose exec node bash
-cd /var/www/frontend
-npm install
 ```
 
 Node applications registered through Project Manager use ports in the internal range `3000-3099` and are exposed through Nginx.
@@ -685,6 +741,12 @@ Database credentials and host ports are also configurable in `.env`.
 ./dockavel project:edit
 ./dockavel project:remove
 
+# Project-aware runtime commands
+./dockavel shell my-api
+./dockavel artisan my-api migrate
+./dockavel composer my-api install
+./dockavel npm frontend install
+
 # Stack status
 docker compose ps
 
@@ -750,6 +812,10 @@ Verify that the selected mirror actually provides/proxies the upstream image. Do
 
 Re-run `./setup.sh` and explicitly choose another preset or `Custom endpoints` when needed.
 
+### Project exists on the host but is not visible in a runtime
+
+Project-aware commands verify the project path before execution. If Docker Desktop/WSL has a stale bind mount, Dockavel reports the visibility problem instead of launching Artisan, Composer, npm, or a shell in the wrong state. Restarting Docker Desktop can resolve a stale bind mount when the host path is otherwise correct.
+
 ### Add a service without deleting the existing stack
 
 Re-run:
@@ -789,7 +855,8 @@ GitHub Actions currently validates:
 - PHP 8.2, 8.3, 8.4, and 8.5 builds
 - required PHP runtime capabilities
 - Node.js 24 build/runtime
-- `setup.sh`, `dockavel`, and project-manager shell syntax
+- `setup.sh`, `dockavel`, Project Manager, and Project Commands shell syntax
+- project-aware command routing with a fake Docker CLI
 - executable CLI entry point
 
 ## Roadmap
@@ -803,20 +870,18 @@ Completed core foundations:
 ✅ MySQL / PostgreSQL / Redis / Node
 ✅ Doctor / source diagnostics
 ✅ Project add / list / edit / remove
+✅ Project-aware shell / Artisan / Composer / npm
 ```
 
-Next planned productivity layer:
+Likely next productivity work:
 
 ```text
-./dockavel shell my-api
-./dockavel artisan my-api migrate
-./dockavel composer my-api install
-./dockavel npm frontend install
+- smarter project detection and runtime suggestions
+- database helpers for repeated local workflows
+- additional Doctor / project health diagnostics
 ```
 
-These shortcuts will use project metadata so users do not need to remember container names or runtime mappings.
-
-Possible later additions remain intentionally limited to features that reduce repeated setup/debugging work.
+These remain separate features and should stay explicit rather than adding hidden automation.
 
 ## Contributing
 
