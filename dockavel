@@ -21,6 +21,10 @@ Usage:
   ./dockavel project:list
   ./dockavel project:edit [project]
   ./dockavel project:remove [project]
+  ./dockavel shell <project>
+  ./dockavel artisan <project> [arguments...]
+  ./dockavel composer <project> [arguments...]
+  ./dockavel npm <project> [arguments...]
   ./dockavel help
 
 Commands:
@@ -30,6 +34,10 @@ Commands:
   project:list    List projects registered through Dockavel metadata.
   project:edit    Edit a registered project's domain/runtime/service metadata and regenerate Nginx.
   project:remove  Remove Dockavel metadata and Nginx config without deleting the project source files.
+  shell           Open a shell in the registered project's configured PHP or Node runtime.
+  artisan         Run Laravel Artisan in the project's configured PHP runtime.
+  composer        Run Composer in the project's configured PHP runtime.
+  npm             Run npm in the shared Node runtime for a Node-enabled project.
   help            Show this help.
 HELP
 }
@@ -119,9 +127,6 @@ http_probe() {
     if ! run_curl_probe "$url" auto; then
         failure_detail="$(curl_error_detail "$CURL_RC" "$CURL_STDERR")"
 
-        # Restricted or partially broken networks sometimes advertise IPv6 even
-        # when the route is unusable. A read-only IPv4 retry helps identify that
-        # case without changing DNS or system configuration.
         if run_curl_probe "$url" ipv4; then
             IFS='|' read -r code time_total remote_ip <<< "$CURL_RESULT"
             if [[ "$code" =~ ^(2|3)[0-9][0-9]$ || "$code" == "401" || "$code" == "403" ]]; then
@@ -331,6 +336,10 @@ doctor() {
 # shellcheck source=lib/project-manager.sh
 source "$ROOT_DIR/lib/project-manager.sh"
 
+# Project-aware runtime commands reuse registered project metadata.
+# shellcheck source=lib/project-commands.sh
+source "$ROOT_DIR/lib/project-commands.sh"
+
 main() {
     local command="${1:-help}"
     case "$command" in
@@ -351,6 +360,22 @@ main() {
             ;;
         project:remove|project-remove)
             project_remove "${2:-}"
+            ;;
+        shell)
+            shift
+            project_shell "$@"
+            ;;
+        artisan)
+            shift
+            project_artisan "$@"
+            ;;
+        composer)
+            shift
+            project_composer "$@"
+            ;;
+        npm)
+            shift
+            project_npm "$@"
             ;;
         help|-h|--help)
             print_help
